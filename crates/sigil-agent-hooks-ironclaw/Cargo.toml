@@ -10,7 +10,7 @@ description = "IronClaw hook adapter for Sigil pre-tool authorization"
 async-trait.workspace = true
 ironclaw = { version = "0.24", default-features = false }
 serde_json.workspace = true
-sigil-agent-hooks-core = { path = "../sigil-agent-hooks-core" }
+sigil-agent-hooks-core = { version = "0.1.0", path = "../sigil-agent-hooks-core" }
 
 [dev-dependencies]
 axum = "0.8"
