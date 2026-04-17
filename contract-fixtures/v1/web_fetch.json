@@ -1,0 +1,9 @@
+{
+  "framework": "agent-hooks",
+  "agentId": "fixture-agent",
+  "txCommit": "2222222222222222222222222222222222222222222222222222222222222222",
+  "intent": {
+    "action": "web_fetch",
+    "url": "https://example.com/policy"
+  }
+}

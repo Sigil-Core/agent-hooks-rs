@@ -1,0 +1,17 @@
+[package]
+name = "sigil-agent-hooks-ironclaw"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "IronClaw hook adapter for Sigil pre-tool authorization"
+
+[dependencies]
+async-trait.workspace = true
+ironclaw = { version = "0.24", default-features = false }
+serde_json.workspace = true
+sigil-agent-hooks-core = { path = "../sigil-agent-hooks-core" }
+
+[dev-dependencies]
+axum = "0.8"
+tokio.workspace = true

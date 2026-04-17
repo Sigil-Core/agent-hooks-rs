@@ -1,0 +1,9 @@
+{
+  "framework": "agent-hooks",
+  "agentId": "fixture-agent",
+  "txCommit": "1111111111111111111111111111111111111111111111111111111111111111",
+  "intent": {
+    "action": "bash",
+    "command": "ls -la"
+  }
+}

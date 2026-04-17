@@ -1,0 +1,9 @@
+{
+  "framework": "agent-hooks",
+  "agentId": "intent-agent",
+  "txCommit": "6fd4947d41a7b08df3fede4821f93f9c92176a828b7fd9669772577a415e0f9d",
+  "intent": {
+    "action": "bash",
+    "command": "echo hi"
+  }
+}

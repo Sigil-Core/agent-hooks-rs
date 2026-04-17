@@ -1,0 +1,11 @@
+{
+  "framework": "agent-hooks",
+  "agentId": "fixture-agent",
+  "txCommit": "3333333333333333333333333333333333333333333333333333333333333333",
+  "chainId": 1,
+  "intent": {
+    "action": "wallet.transfer",
+    "targetAddress": "0xabc",
+    "amount": "1000000000000000000"
+  }
+}

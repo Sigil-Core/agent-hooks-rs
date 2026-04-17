@@ -1,0 +1,48 @@
+name: Publish Rust Crates
+
+on:
+  push:
+    tags:
+      - "rs-v*"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: crates-io
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate release tag
+        run: |
+          case "${GITHUB_REF}" in
+            refs/tags/rs-v*) ;;
+            *)
+              echo "publish-rust.yml only publishes from rs-v* tags" >&2
+              exit 1
+              ;;
+          esac
+
+          TAG_VERSION="${GITHUB_REF#refs/tags/rs-v}"
+          WORKSPACE_VERSION="$(
+            awk '
+              /^\[workspace.package\]/ { in_workspace = 1; next }
+              /^\[/ && in_workspace { exit }
+              in_workspace && /^version = / { gsub(/"/, "", $3); print $3; exit }
+            ' Cargo.toml
+          )"
+
+          if [ "${TAG_VERSION}" != "${WORKSPACE_VERSION}" ]; then
+            echo "tag version ${TAG_VERSION} does not match workspace version ${WORKSPACE_VERSION}" >&2
+            exit 1
+          fi
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.92.0
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo publish -p sigil-agent-hooks-core --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - run: sleep 30
+      - run: cargo publish -p sigil-agent-hooks-ironclaw --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
