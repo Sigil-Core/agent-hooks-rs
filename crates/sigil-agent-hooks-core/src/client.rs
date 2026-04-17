@@ -159,9 +159,21 @@ impl SigilClient {
         &self,
         intent: &SigilIntent,
     ) -> Result<String, SigilClientError> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(SigilClientError::Clock)?
+            .as_secs();
+        self.build_authorize_request_at(intent, now)
+    }
+
+    fn build_authorize_request_at(
+        &self,
+        intent: &SigilIntent,
+        now: u64,
+    ) -> Result<String, SigilClientError> {
         let tx_commit = match intent.tx_commit.as_deref() {
             Some(value) => Some(value.to_string()),
-            None => Some(generate_intent_commit(intent)?),
+            None => Some(generate_intent_commit_at(intent, now)?),
         };
 
         let request = AuthorizeRequest {
@@ -192,7 +204,18 @@ impl SigilClient {
         &self,
         intent: &SigilIntent,
     ) -> Result<SigilResult, SigilClientError> {
-        let body = self.build_authorize_request(intent)?;
+        self.check_intent_at(intent, None).await
+    }
+
+    async fn check_intent_at(
+        &self,
+        intent: &SigilIntent,
+        timestamp_override: Option<u64>,
+    ) -> Result<SigilResult, SigilClientError> {
+        let body = match timestamp_override {
+            Some(now) => self.build_authorize_request_at(intent, now)?,
+            None => self.build_authorize_request(intent)?,
+        };
         let mut response = match self
             .http
             .post(format!("{}/v1/authorize", self.config.api_url))
@@ -285,14 +308,6 @@ impl SigilClient {
     }
 }
 
-fn generate_intent_commit(intent: &SigilIntent) -> Result<String, SigilClientError> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(SigilClientError::Clock)?
-        .as_secs();
-    generate_intent_commit_at(intent, now)
-}
-
 fn generate_intent_commit_at(intent: &SigilIntent, now: u64) -> Result<String, SigilClientError> {
     let preimage = IntentCommitPreimage {
         action: &intent.action,
@@ -333,7 +348,63 @@ async fn read_response_body(response: &mut reqwest::Response) -> Result<Vec<u8>,
 #[cfg(test)]
 mod tests {
     use super::generate_intent_commit_at;
-    use crate::SigilIntent;
+    use crate::{FrameworkId, SigilClient, SigilIntent};
+    use axum::{Router, body::Bytes, extract::State, http::StatusCode, routing::post};
+    use std::sync::{Arc, Mutex};
+    use tokio::{net::TcpListener, sync::oneshot};
+
+    #[derive(Clone)]
+    struct MockState {
+        captures: Arc<Mutex<Vec<String>>>,
+    }
+
+    struct TestServer {
+        base_url: String,
+        captures: Arc<Mutex<Vec<String>>>,
+        shutdown: Option<oneshot::Sender<()>>,
+    }
+
+    impl Drop for TestServer {
+        fn drop(&mut self) {
+            if let Some(tx) = self.shutdown.take() {
+                let _ = tx.send(());
+            }
+        }
+    }
+
+    async fn authorize(State(state): State<MockState>, body: Bytes) -> (StatusCode, &'static str) {
+        let payload = String::from_utf8(body.to_vec()).expect("utf8 body");
+        state.captures.lock().expect("capture lock").push(payload);
+        (StatusCode::OK, "{\"status\":\"APPROVED\"}")
+    }
+
+    async fn spawn() -> TestServer {
+        let captures = Arc::new(Mutex::new(Vec::new()));
+        let state = MockState {
+            captures: Arc::clone(&captures),
+        };
+        let app = Router::new()
+            .route("/v1/authorize", post(authorize))
+            .with_state(state);
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("listener should bind");
+        let addr = listener.local_addr().expect("local addr");
+        let (tx, rx) = oneshot::channel();
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app)
+                .with_graceful_shutdown(async {
+                    let _ = rx.await;
+                })
+                .await;
+        });
+
+        TestServer {
+            base_url: format!("http://{addr}"),
+            captures,
+            shutdown: Some(tx),
+        }
+    }
 
     #[test]
     fn generated_commit_omits_absent_optional_fields() {
@@ -347,6 +418,36 @@ mod tests {
         assert_eq!(
             commit,
             "6fd4947d41a7b08df3fede4821f93f9c92176a828b7fd9669772577a415e0f9d"
+        );
+    }
+
+    #[tokio::test]
+    async fn auto_generated_commit_matches_wire_fixture_with_pinned_timestamp() {
+        let server = spawn().await;
+        let client = SigilClient::builder("sk_fixture")
+            .api_url(server.base_url.clone())
+            .agent_id("config-agent")
+            .framework(FrameworkId::AgentHooks)
+            .build()
+            .expect("client should build");
+
+        let intent = SigilIntent {
+            action: "bash".to_string(),
+            agent_id: Some("intent-agent".to_string()),
+            command: Some("echo hi".to_string()),
+            ..SigilIntent::default()
+        };
+
+        let _ = client
+            .check_intent_at(&intent, Some(1_700_000_000))
+            .await
+            .expect("request should succeed");
+
+        let captured = server.captures.lock().expect("capture lock");
+        let body = captured.first().expect("captured body");
+        assert_eq!(
+            body,
+            "{\n  \"framework\": \"agent-hooks\",\n  \"agentId\": \"intent-agent\",\n  \"txCommit\": \"6fd4947d41a7b08df3fede4821f93f9c92176a828b7fd9669772577a415e0f9d\",\n  \"intent\": {\n    \"action\": \"bash\",\n    \"command\": \"echo hi\"\n  }\n}\n"
         );
     }
 }
