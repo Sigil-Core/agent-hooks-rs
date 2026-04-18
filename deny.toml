@@ -2,6 +2,7 @@
 all-features = true
 
 [licenses]
+version = 2
 allow = [
   "MIT",
   "Apache-2.0",
@@ -16,7 +17,35 @@ allow = [
   "OpenSSL",
 ]
 confidence-threshold = 0.8
+unused-allowed-license = "allow"
+exceptions = [
+  # `ironclaw` 0.24.0 pulls these in transitively. Keep the exception scoped
+  # to the exact crates rather than broadening the workspace allowlist.
+  { name = "clipboard-win", allow = ["BSL-1.0"] },
+  { name = "error-code", allow = ["BSL-1.0"] },
+  { name = "webpki-roots", allow = ["CDLA-Permissive-2.0"] },
+]
 
 [advisories]
 version = 2
-
+ignore = [
+  # `ironclaw` 0.24.0 hard-pins `wasmtime` 28.x. Upstream `ironclaw-v0.25.0`
+  # upgraded to `wasmtime` 43.0.1, but that release is not on crates.io yet.
+  "RUSTSEC-2024-0436",
+  "RUSTSEC-2025-0046",
+  "RUSTSEC-2025-0057",
+  "RUSTSEC-2025-0118",
+  "RUSTSEC-2026-0020",
+  "RUSTSEC-2026-0021",
+  "RUSTSEC-2026-0085",
+  "RUSTSEC-2026-0086",
+  "RUSTSEC-2026-0087",
+  "RUSTSEC-2026-0088",
+  "RUSTSEC-2026-0089",
+  "RUSTSEC-2026-0091",
+  "RUSTSEC-2026-0092",
+  "RUSTSEC-2026-0093",
+  "RUSTSEC-2026-0094",
+  "RUSTSEC-2026-0095",
+  "RUSTSEC-2026-0096",
+]

@@ -1,0 +1,20 @@
+[advisories]
+ignore = [
+  # `ironclaw` 0.24.0 hard-pins `wasmtime` 28.x. Upstream `ironclaw-v0.25.0`
+  # upgraded to `wasmtime` 43.0.1, but that release is not on crates.io yet.
+  "RUSTSEC-2025-0046",
+  "RUSTSEC-2025-0118",
+  "RUSTSEC-2026-0020",
+  "RUSTSEC-2026-0021",
+  "RUSTSEC-2026-0085",
+  "RUSTSEC-2026-0086",
+  "RUSTSEC-2026-0087",
+  "RUSTSEC-2026-0088",
+  "RUSTSEC-2026-0089",
+  "RUSTSEC-2026-0091",
+  "RUSTSEC-2026-0092",
+  "RUSTSEC-2026-0093",
+  "RUSTSEC-2026-0094",
+  "RUSTSEC-2026-0095",
+  "RUSTSEC-2026-0096",
+]
