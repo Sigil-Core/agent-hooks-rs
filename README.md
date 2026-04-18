@@ -9,6 +9,3 @@ package while providing:
 - `sigil-agent-hooks-core`: generic Rust client for Sigil `/v1/authorize`
 - `sigil-agent-hooks-ironclaw`: native IronClaw hook adapter built on the core
   crate
-
-The canonical design lives in
-[docs/plans/2026-04-17-agent-hooks-rs-v0.1.0.md](docs/plans/2026-04-17-agent-hooks-rs-v0.1.0.md).
