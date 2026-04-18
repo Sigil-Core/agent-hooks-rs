@@ -1,20 +1,31 @@
-# .coderabbit.yaml — drop into each repo root
-# Adjust path_instructions per repo; this example covers both
-# agent-hooks (npm/TS) and agent-hooks-rs (Rust/crates.io) patterns.
+# .coderabbit.yaml — agent-hooks-rs (Rust, crates.io workspace)
 
 reviews:
-  # Auto-review every PR
   auto_review:
     enabled: true
 
   path_instructions:
-    # Rust-specific paths (agent-hooks-rs)
-    - path: "src/**/*.rs"
+    - path: "crates/**/*.rs"
       instructions: |
+        This is the Rust implementation of Sigil agent hooks, published to crates.io.
+        Workspace contains sigil-agent-hooks-core and sigil-agent-hooks-ironclaw.
         - Verify unsafe blocks are justified and documented.
         - Check error handling uses thiserror or anyhow consistently.
         - Flag any unwrap() or expect() outside of tests.
         - Confirm public API changes are semver-appropriate.
+        - Check that ironclaw integration stays isolated in its own crate.
+
+    - path: "crates/sigil-agent-hooks-core/**"
+      instructions: |
+        Core crate must remain framework-agnostic. No ironclaw-specific types here.
+        - Verify traits and interfaces are well-documented.
+        - Flag any framework-specific dependencies.
+
+    - path: "crates/sigil-agent-hooks-ironclaw/**"
+      instructions: |
+        Ironclaw adapter crate. Bridges core hooks to the ironclaw runtime.
+        - Check version compatibility with upstream ironclaw releases.
+        - Flag any wasmtime version constraints or advisory workarounds.
 
     - path: "deny.toml"
       instructions: |
@@ -22,38 +33,21 @@ reviews:
         - Flag any blanket license allows.
         - Check advisory ignores have expiration comments or upstream references.
 
+    - path: ".cargo/audit.toml"
+      instructions: |
+        - Verify advisory ignores reference specific RUSTSEC IDs.
+        - Check that each ignore has a comment explaining why and when it can be removed.
+
     - path: "Cargo.toml"
       instructions: |
         - Confirm version follows semver.
         - Check for wildcard dependency versions.
-        - Verify publish metadata (description, license, repository) is present.
-
-    # TypeScript/Node paths (agent-hooks)
-    - path: "src/**/*.ts"
-      instructions: |
-        - Check for proper error handling (no swallowed promises).
-        - Verify exported types are documented.
-        - Flag any use of 'any' type.
-
-    - path: "package.json"
-      instructions: |
-        - Confirm version follows semver.
-        - Check that publish metadata (name, version, main/exports, license) is present.
-        - Flag missing or overly broad files/exports config.
-
-    # Tests in either language
-    - path: "tests/**"
-      instructions: |
-        Ensure tests cover edge cases, not just happy paths.
-        Flag tests that assert on implementation details rather than behavior.
+        - Verify publish metadata (description, license, repository) is present for each published crate.
 
     - path: "**/*.md"
       instructions: |
-        Check for accuracy against the current code.
-        Flag stale references or outdated instructions.
+        Check for accuracy against the current code. Flag stale references.
 
   path_filters:
     - "!target/**"
-    - "!node_modules/**"
-    - "!dist/**"
     - "!*.lock"
