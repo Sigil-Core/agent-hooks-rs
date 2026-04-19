@@ -2,10 +2,24 @@ name: Rust CI
 
 on:
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.txt'
+      - 'docs/**'
+      - 'assets/**'
+      - 'SKILL.md'
+      - 'README'
   push:
     branches:
       - main
       - session/**
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.txt'
+      - 'docs/**'
+      - 'assets/**'
+      - 'SKILL.md'
+      - 'README'
 
 jobs:
   verify:
@@ -25,4 +39,3 @@ jobs:
       - run: cargo test --workspace --all-features
       - run: cargo deny check
       - run: cargo audit
-
