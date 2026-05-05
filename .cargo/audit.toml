@@ -1,0 +1,24 @@
+[advisories]
+# Mirrors the ignore list in the workspace deny.toml. Both `cargo audit` and
+# `cargo deny check` run in CI and need their own ignore configuration.
+# See deny.toml for the full justification (ironclaw 0.24.0 pins wasmtime
+# 28.x; ironclaw 0.25 with wasmtime 43.0.1 is not on crates.io yet; none
+# of the listed CVEs are reachable from sigil-agent-hooks-ironclaw's call
+# path because no wasmtime Engine/Module is ever instantiated).
+ignore = [
+  "RUSTSEC-2025-0046",
+  "RUSTSEC-2025-0118",
+  "RUSTSEC-2026-0020",
+  "RUSTSEC-2026-0021",
+  "RUSTSEC-2026-0085",
+  "RUSTSEC-2026-0086",
+  "RUSTSEC-2026-0087",
+  "RUSTSEC-2026-0088",
+  "RUSTSEC-2026-0089",
+  "RUSTSEC-2026-0091",
+  "RUSTSEC-2026-0092",
+  "RUSTSEC-2026-0093",
+  "RUSTSEC-2026-0094",
+  "RUSTSEC-2026-0095",
+  "RUSTSEC-2026-0096",
+]
