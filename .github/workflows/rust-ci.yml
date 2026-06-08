@@ -2,40 +2,68 @@ name: Rust CI
 
 on:
   pull_request:
-    paths-ignore:
-      - '**/*.md'
-      - '**/*.txt'
-      - 'docs/**'
-      - 'assets/**'
-      - 'SKILL.md'
-      - 'README'
   push:
     branches:
       - main
       - session/**
-    paths-ignore:
-      - '**/*.md'
-      - '**/*.txt'
-      - 'docs/**'
-      - 'assets/**'
-      - 'SKILL.md'
-      - 'README'
 
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Detect Rust-impacting changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+          fi
+
+          if [ "${BASE_SHA}" = "0000000000000000000000000000000000000000" ]; then
+            BASE_SHA="$(git rev-list --max-parents=0 HEAD)"
+          fi
+
+          if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            git fetch --no-tags origin "${BASE_SHA}"
+          fi
+
+          git diff --name-only "${BASE_SHA}" HEAD > changed-files.txt
+
+          if grep -Eq '^(Cargo\.(toml|lock)|deny\.toml|\.cargo/audit\.toml|crates/|contract-fixtures/)' changed-files.txt; then
+            echo "rust_changed=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "rust_changed=false" >> "${GITHUB_OUTPUT}"
+          fi
+      - name: Skip Rust checks for docs or repo-maintenance changes
+        if: steps.changes.outputs.rust_changed != 'true'
+        run: |
+          echo "No Rust-impacting files changed; skipping Rust CI."
+          sed 's/^/- /' changed-files.txt
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.changes.outputs.rust_changed == 'true'
         with:
           toolchain: 1.92.0
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+        if: steps.changes.outputs.rust_changed == 'true'
       - uses: taiki-e/install-action@v2
+        if: steps.changes.outputs.rust_changed == 'true'
         with:
           tool: cargo-deny,cargo-audit
-      - run: cargo fmt --check
-      - run: cargo clippy --workspace --all-features --all-targets -- -D warnings
-      - run: cargo test --workspace --all-features
-      - run: cargo deny check
-      - run: cargo audit
+      - if: steps.changes.outputs.rust_changed == 'true'
+        run: cargo fmt --check
+      - if: steps.changes.outputs.rust_changed == 'true'
+        run: cargo clippy --workspace --all-features --all-targets -- -D warnings
+      - if: steps.changes.outputs.rust_changed == 'true'
+        run: cargo test --workspace --all-features
+      - if: steps.changes.outputs.rust_changed == 'true'
+        run: cargo deny check
+      - if: steps.changes.outputs.rust_changed == 'true'
+        run: cargo audit
