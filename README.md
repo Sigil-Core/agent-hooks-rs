@@ -89,6 +89,42 @@ let hook = IronclawSigilHook::builder(client)
 
 The builder silently rebinds `FrameworkId::AgentHooks` to `FrameworkId::Ironclaw` so the authorize request carries the correct framework identifier.
 
+### Model budget helpers
+
+Execution Limits v2 model budgets use cumulative `metadata.model_usage` on
+`model.inference` checks. `sigil-agent-hooks-core` provides a task-local ledger
+and helper check:
+
+```rust
+use sigil_agent_hooks_core::{
+    SigilModelUsage, check_model_budget, record_model_usage,
+};
+
+record_model_usage(
+    &client,
+    SigilModelUsage {
+        provider: Some("anthropic".to_string()),
+        model: Some("claude-sonnet-4".to_string()),
+        input_tokens: Some(100),
+        output_tokens: Some(25),
+        estimated_spend_usd: Some("0.25".to_string()),
+        ..SigilModelUsage::default()
+    },
+    None,
+)?;
+
+let result = check_model_budget(&client, None).await?;
+```
+
+The helpers resolve task id from the explicit argument first, then
+`SigilClientBuilder::task_id`, then a process-local fallback. Usage entries are
+evicted after 24 hours. Spend accumulation uses integer microdollar math.
+
+IronClaw's native hook currently sees `BeforeToolCall` events only. If your host
+owns the model provider call, wrap that provider call with the core helpers
+above. Do not claim automatic IronClaw model-budget enforcement unless provider
+usage is recorded before `check_model_budget` runs.
+
 #### Custom tool mapping
 
 The default mapper covers common tool aliases (`exec`/`process`/`code_execution` to `bash`, `write`/`edit`/`apply_patch` to `file_write`, wallet and web fetch variants). Unknown tools pass through as lowercase strings.
@@ -130,6 +166,7 @@ impl ToolIntentMapper for MyMapper {
 | `builder(api_key)` | `impl Into<String>` | (required) | Sigil API key (`sk_sigil_...`) |
 | `.api_url(url)` | `impl Into<String>` | `https://sign.sigilcore.com` | Sigil Sign API URL |
 | `.agent_id(id)` | `impl Into<String>` | `"agent"` | Identifier for this agent |
+| `.task_id(id)` | `impl Into<String>` | generated when needed | Stable task id for execution limits and model budgets |
 | `.framework(id)` | `FrameworkId` | `AgentHooks` | Framework identifier for the authorize request |
 | `.fail_mode(mode)` | `FailMode` | `Closed` | Behavior when Sigil is unreachable |
 | `.request_timeout(dur)` | `Duration` | `5s` | HTTP request timeout |
@@ -147,6 +184,7 @@ impl ToolIntentMapper for MyMapper {
 | `to` | `Option<String>` | Recipient address (for wallet actions) |
 | `amount` | `Option<String>` | Transfer amount (for wallet actions) |
 | `tx_commit` | `Option<String>` | Explicit intent commit hash; auto-generated if omitted |
+| `task_id` | `Option<String>` | Stable task/session id for execution limits and model budgets |
 | `metadata` | `Option<Value>` | Arbitrary JSON metadata forwarded to Sigil |
 
 ## Fail Modes
@@ -212,6 +250,10 @@ The TypeScript package defaults to `FailMode::Open` for backward compatibility w
 | Generic (any Rust host) | `sigil-agent-hooks-core` | Direct `check_intent` calls |
 | IronClaw (nearai) | `sigil-agent-hooks-ironclaw` | Native `Hook` trait implementation |
 | Claude Code / Anthropic SDK | [`@sigilcore/agent-hooks`](https://github.com/Sigil-Core/agent-hooks) | TypeScript adapter |
+| OpenAI Codex | [`@sigilcore/agent-hooks`](https://github.com/Sigil-Core/agent-hooks) | TypeScript adapter |
+| Hermes Agent | [`@sigilcore/agent-hooks`](https://github.com/Sigil-Core/agent-hooks) | TypeScript adapter |
+| OpenRouter | [`@sigilcore/agent-hooks`](https://github.com/Sigil-Core/agent-hooks) | TypeScript adapter |
+| AgentPay (WLFI) | [`@sigilcore/agent-hooks`](https://github.com/Sigil-Core/agent-hooks) | TypeScript adapter |
 | ELIZA | [`@sigilcore/agent-hooks`](https://github.com/Sigil-Core/agent-hooks) | TypeScript adapter |
 | LangChain | [`@sigilcore/agent-hooks`](https://github.com/Sigil-Core/agent-hooks) | TypeScript adapter |
 | OpenClaw / NemoClaw | [`@sigilcore/agent-hooks`](https://github.com/Sigil-Core/agent-hooks) | TypeScript adapter |

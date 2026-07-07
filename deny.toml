@@ -28,15 +28,16 @@ exceptions = [
 
 [advisories]
 version = 2
-# `ironclaw` 0.24.0 hard-pins `wasmtime` 28.x and is the latest published
-# crates.io release. Upstream `ironclaw-v0.25.0` upgraded to `wasmtime` 43.0.1
-# but is not on crates.io yet. Until that release lands, the wasmtime CVEs
-# below are ignored on the basis that none are reachable from this crate's
-# call path:
+# `ironclaw` 0.24.0 is the latest published crates.io release. It hard-pins
+# `wasmtime` 28.x and pulls optional assistant/runtime dependencies such as
+# `pdf-extract`, `termimad`, and QUIC crates into Cargo.lock. Until a newer
+# IronClaw release lands, the transitive advisories below are ignored on the
+# basis that none are reachable from this crate's call path:
 #   * `sigil-agent-hooks-ironclaw` only imports `ironclaw::hooks::*` types
 #     (Hook, HookContext, HookError, HookEvent, HookFailureMode, HookOutcome,
-#     HookPoint). No `Engine`, `Module`, or `Linker` is constructed; no WASM
-#     module is ever instantiated through this code path.
+#     HookPoint). No IronClaw model runner, PDF parser, terminal renderer,
+#     QUIC endpoint, `Engine`, `Module`, or `Linker` is constructed.
+#   * No WASM module is ever instantiated through this code path.
 #   * `ironclaw` 0.24.0 enables `wasmtime` with `features = ["component-model"]`
 #     on top of defaults. Winch is NOT in wasmtime 28's default feature set and
 #     is NOT explicitly enabled, so RUSTSEC-2026-0095 (Winch sandbox escape)
@@ -63,4 +64,9 @@ ignore = [
   "RUSTSEC-2026-0094",
   "RUSTSEC-2026-0095",
   "RUSTSEC-2026-0096",
+  "RUSTSEC-2026-0149",
+  "RUSTSEC-2026-0182",
+  "RUSTSEC-2026-0187",
+  "RUSTSEC-2026-0188",
+  "RUSTSEC-2026-0204",
 ]

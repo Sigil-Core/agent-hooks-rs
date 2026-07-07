@@ -28,6 +28,7 @@ Framework-agnostic Rust client for Sigil Sign. Owns the full authorization lifec
 4. Parse the response into a typed `SigilResult` (`Approved`, `Denied`, or `Pending`).
 5. Classify unreachability (network error, timeout, 5xx, non-JSON body, oversized response) through the configured `FailMode` -- `Closed` returns `DENIED` + `SIGIL_UNREACHABLE`; `Open` returns `APPROVED` + `fail_open: true`.
 6. Build structured rejection context (`build_rejection_context`) that agents can consume without parsing free text. Three distinct paths: policy denial, consensus hold (PENDING), and transient unreachability.
+7. Track task-local model usage with `record_model_usage`, `get_model_usage_report`, `clear_model_usage`, and `check_model_budget`. The helper serializes cumulative provider usage under `metadata.model_usage` on `action: "model.inference"` checks.
 
 Authentication failures (401/403) are classified as `SIGIL_AUTH_FAILURE`, not unreachability, so operators can distinguish credential issues from infrastructure failures in telemetry.
 
@@ -44,6 +45,12 @@ Key components:
 **`IronclawSigilHook`** -- the `Hook` implementation. Built via `IronclawSigilHook::builder(client)`. If the client was constructed with the default `FrameworkId::AgentHooks`, the builder silently rebinds it to `FrameworkId::Ironclaw` so the authorize request carries the correct framework identifier. Non-tool events (e.g. `SessionStart`) pass through without an authorization call.
 
 **Decision routing:** `APPROVED` returns `HookOutcome::ok()`. Both `DENIED` and `PENDING` return `HookOutcome::reject()` with a JSON-serialized `SigilRejectionContext` as the reason string. PENDING is deliberately not surfaced as a local approval prompt -- the hold must be resolved through Sigil Command.
+
+**Model budgets:** IronClaw currently exposes `BeforeToolCall` to this adapter.
+It does not expose provider usage before model steps in this crate. Hosts that
+own the IronClaw model loop should wrap provider calls with
+`sigil-agent-hooks-core` model-budget helpers and keep the native hook focused
+on tool-call authorization.
 
 ## Wire parity with agent-hooks (TypeScript)
 
@@ -79,3 +86,11 @@ This guarantees that both implementations produce identical authorize requests f
 **Builder validation, not runtime panics.** Invalid config (bad URL, zero timeout) fails at `SigilClientBuilder::build()` with a typed `SigilClientError::InvalidConfig`. The constructed `SigilClient` is guaranteed valid.
 
 **Response size cap.** Responses are streamed in chunks with a 64 KiB hard cap. An oversized response is classified as unreachable, not parsed.
+
+**IronClaw advisory ignores are scoped.** `ironclaw` 0.24.0 is the latest
+published crates.io release and pulls optional assistant/runtime dependencies
+into the lockfile. `deny.toml` and `.cargo/audit.toml` ignore specific RustSec
+advisories only because `sigil-agent-hooks-ironclaw` imports hook traits and
+does not instantiate IronClaw model runners, PDF parsing, terminal rendering,
+QUIC endpoints, or Wasmtime engines. Revisit the ignores as soon as a newer
+IronClaw crate is published.

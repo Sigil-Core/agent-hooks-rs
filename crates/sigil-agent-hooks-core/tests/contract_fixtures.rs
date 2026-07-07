@@ -96,6 +96,7 @@ async fn bash_fixture_matches_http_wire_body() {
     let client = SigilClient::builder("sk_fixture")
         .api_url(server.base_url.clone())
         .agent_id("fixture-agent")
+        .task_id("fixture-task-1")
         .framework(FrameworkId::AgentHooks)
         .build()
         .expect("client should build");
@@ -122,6 +123,7 @@ async fn web_fetch_fixture_matches_http_wire_body() {
     let client = SigilClient::builder("sk_fixture")
         .api_url(server.base_url.clone())
         .agent_id("fixture-agent")
+        .task_id("fixture-task-1")
         .framework(FrameworkId::AgentHooks)
         .build()
         .expect("client should build");
@@ -148,6 +150,7 @@ async fn wallet_transfer_fixture_matches_http_wire_body() {
     let client = SigilClient::builder("sk_fixture")
         .api_url(server.base_url.clone())
         .agent_id("fixture-agent")
+        .task_id("fixture-task-1")
         .framework(FrameworkId::AgentHooks)
         .build()
         .expect("client should build");
@@ -176,6 +179,7 @@ async fn intent_agent_override_fixture_matches_http_wire_body() {
     let client = SigilClient::builder("sk_fixture")
         .api_url(server.base_url.clone())
         .agent_id("config-agent")
+        .task_id("fixture-task-1")
         .framework(FrameworkId::AgentHooks)
         .build()
         .expect("client should build");

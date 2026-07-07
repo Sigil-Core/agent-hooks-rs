@@ -6,6 +6,7 @@
   "intent": {
     "action": "wallet.transfer",
     "targetAddress": "0xabc",
-    "amount": "1000000000000000000"
+    "amount": "1000000000000000000",
+    "task_id": "fixture-task-1"
   }
 }

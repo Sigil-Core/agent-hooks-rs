@@ -1,6 +1,7 @@
 use reqwest::StatusCode;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::types::{
@@ -11,6 +12,7 @@ use crate::types::{
 const DEFAULT_API_URL: &str = "https://sign.sigilcore.com";
 const DEFAULT_TIMEOUT_SECS: u64 = 5;
 const MAX_RESPONSE_BYTES: usize = 64 * 1024;
+static DEFAULT_TASK_ID: OnceLock<String> = OnceLock::new();
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,6 +40,8 @@ struct AuthorizeIntent<'a> {
     target_address: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     amount: Option<&'a str>,
+    #[serde(rename = "task_id", skip_serializing_if = "Option::is_none")]
+    task_id: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     metadata: Option<&'a serde_json::Value>,
 }
@@ -76,6 +80,7 @@ impl SigilClientBuilder {
             api_key: api_key.into(),
             api_url: DEFAULT_API_URL.to_string(),
             agent_id: Some("agent".to_string()),
+            task_id: None,
             framework: FrameworkId::AgentHooks,
             fail_mode: FailMode::Closed,
             request_timeout: Duration::from_secs(DEFAULT_TIMEOUT_SECS),
@@ -89,6 +94,11 @@ impl SigilClientBuilder {
 
     pub fn agent_id(mut self, agent_id: impl Into<String>) -> Self {
         self.agent_id = Some(agent_id.into());
+        self
+    }
+
+    pub fn task_id(mut self, task_id: impl Into<String>) -> Self {
+        self.task_id = Some(task_id.into());
         self
     }
 
@@ -137,6 +147,7 @@ impl SigilClientBuilder {
                 api_key: self.api_key,
                 api_url: api_url.to_string(),
                 agent_id: self.agent_id,
+                task_id: self.task_id,
                 framework: self.framework,
                 fail_mode: self.fail_mode,
                 request_timeout: self.request_timeout,
@@ -153,6 +164,14 @@ impl SigilClient {
 
     pub fn config(&self) -> &SigilConfig {
         &self.config
+    }
+
+    pub fn resolve_task_id(&self, intent: &SigilIntent) -> String {
+        intent
+            .task_id
+            .clone()
+            .or_else(|| self.config.task_id.clone())
+            .unwrap_or_else(default_task_id)
     }
 
     pub fn build_authorize_request(
@@ -175,6 +194,7 @@ impl SigilClient {
             Some(value) => Some(value.to_string()),
             None => Some(generate_intent_commit_at(intent, now)?),
         };
+        let task_id = self.resolve_task_id(intent);
 
         let request = AuthorizeRequest {
             framework: &self.config.framework,
@@ -192,6 +212,7 @@ impl SigilClient {
                 path: intent.path.as_deref(),
                 target_address: intent.to.as_deref(),
                 amount: intent.amount.as_deref(),
+                task_id: Some(task_id.as_str()),
                 metadata: intent.metadata.as_ref(),
             },
         };
@@ -306,6 +327,20 @@ impl SigilClient {
             },
         }
     }
+}
+
+fn default_task_id() -> String {
+    DEFAULT_TASK_ID
+        .get_or_init(|| {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|duration| duration.as_nanos())
+                .unwrap_or_default();
+            let pid = std::process::id();
+            let digest = Sha256::digest(format!("{pid}:{now}").as_bytes());
+            format!("rust-task-{}", &format!("{digest:x}")[..16])
+        })
+        .clone()
 }
 
 fn generate_intent_commit_at(intent: &SigilIntent, now: u64) -> Result<String, SigilClientError> {
@@ -445,9 +480,19 @@ mod tests {
 
         let captured = server.captures.lock().expect("capture lock");
         let body = captured.first().expect("captured body");
+        let body: serde_json::Value = serde_json::from_str(body).expect("json body");
+        assert_eq!(body["framework"], "agent-hooks");
+        assert_eq!(body["agentId"], "intent-agent");
         assert_eq!(
-            body,
-            "{\n  \"framework\": \"agent-hooks\",\n  \"agentId\": \"intent-agent\",\n  \"txCommit\": \"6fd4947d41a7b08df3fede4821f93f9c92176a828b7fd9669772577a415e0f9d\",\n  \"intent\": {\n    \"action\": \"bash\",\n    \"command\": \"echo hi\"\n  }\n}\n"
+            body["txCommit"],
+            "6fd4947d41a7b08df3fede4821f93f9c92176a828b7fd9669772577a415e0f9d"
+        );
+        assert_eq!(body["intent"]["action"], "bash");
+        assert_eq!(body["intent"]["command"], "echo hi");
+        assert!(
+            body["intent"]["task_id"]
+                .as_str()
+                .is_some_and(|value| value.starts_with("rust-task-"))
         );
     }
 }

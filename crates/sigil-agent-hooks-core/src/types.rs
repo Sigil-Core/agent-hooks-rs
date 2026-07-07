@@ -89,6 +89,7 @@ pub struct SigilIntent {
     pub to: Option<String>,
     pub amount: Option<String>,
     pub tx_commit: Option<String>,
+    pub task_id: Option<String>,
     pub metadata: Option<serde_json::Value>,
 }
 
@@ -97,6 +98,7 @@ pub struct SigilConfig {
     pub api_key: String,
     pub api_url: String,
     pub agent_id: Option<String>,
+    pub task_id: Option<String>,
     pub framework: FrameworkId,
     pub fail_mode: FailMode,
     pub request_timeout: Duration,
@@ -107,6 +109,7 @@ pub struct SigilClientBuilder {
     pub(crate) api_key: String,
     pub(crate) api_url: String,
     pub(crate) agent_id: Option<String>,
+    pub(crate) task_id: Option<String>,
     pub(crate) framework: FrameworkId,
     pub(crate) fail_mode: FailMode,
     pub(crate) request_timeout: Duration,
@@ -135,11 +138,61 @@ pub struct SigilRejectionContext {
     pub sigil_message: String,
     pub sigil_hold_id: Option<String>,
     pub sigil_policy_hash: Option<String>,
+    pub sigil_task_id: Option<String>,
     pub sigil_action_taken: String,
     pub sigil_next_steps: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+/// Raw model usage reported by a provider adapter before Sigil normalizes it.
+pub struct SigilModelUsage {
+    /// Provider name such as `openrouter`, `anthropic`, or `openai`.
+    pub provider: Option<String>,
+    /// Provider model identifier used for the inference call.
+    pub model: Option<String>,
+    /// Prompt, input, or context tokens reported by the provider.
+    pub input_tokens: Option<u64>,
+    /// Completion or output tokens reported by the provider.
+    pub output_tokens: Option<u64>,
+    /// Optional raw total from the provider. When omitted, Sigil derives it
+    /// from `input_tokens + output_tokens` during normalization.
+    pub total_tokens: Option<u64>,
+    /// Decimal USD spend estimate, stored as a string with up to 6 fractional
+    /// digits so integer microdollar accumulation stays deterministic.
+    pub estimated_spend_usd: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+/// Cumulative, task-local model usage submitted to Sigil for budget checks.
+pub struct SigilModelUsageReport {
+    /// Last known provider name for the task-local usage ledger.
+    pub provider: Option<String>,
+    /// Last known model identifier for the task-local usage ledger.
+    pub model: Option<String>,
+    /// Accumulated input tokens for the task.
+    pub input_tokens: Option<u64>,
+    /// Accumulated output tokens for the task.
+    pub output_tokens: Option<u64>,
+    /// Required accumulated total tokens. Missing provider totals are derived
+    /// from input and output counts before they enter the ledger.
+    pub total_tokens: u64,
+    /// Accumulated decimal USD spend estimate with up to 6 fractional digits.
+    pub estimated_spend_usd: Option<String>,
+}
+
+#[derive(Debug, Error, PartialEq, Eq)]
+/// Errors raised while normalizing or accumulating provider model usage.
+pub enum SigilModelUsageError {
+    #[error("{field} overflowed u64")]
+    TokenOverflow { field: &'static str },
+    #[error("estimated_spend_usd must be a decimal string with up to 6 fractional digits")]
+    InvalidSpend,
+    #[error("estimated_spend_usd overflowed microdollar accumulator")]
+    SpendOverflow,
+}
+
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum SigilClientError {
     #[error("invalid {field}: {message}")]
     InvalidConfig {
@@ -152,4 +205,6 @@ pub enum SigilClientError {
     Serialize(serde_json::Error),
     #[error("system clock before unix epoch: {0}")]
     Clock(SystemTimeError),
+    #[error("invalid model usage: {0}")]
+    ModelUsage(#[from] SigilModelUsageError),
 }

@@ -122,6 +122,10 @@ impl IronclawSigilHookBuilder {
                 Some(agent_id) => rebuilt.agent_id(agent_id.clone()),
                 None => rebuilt,
             };
+            let rebuilt = match &self.client.config().task_id {
+                Some(task_id) => rebuilt.task_id(task_id.clone()),
+                None => rebuilt,
+            };
 
             self.client = rebuilt.build()?;
         }
@@ -171,6 +175,7 @@ impl Hook for IronclawSigilHook {
             .mapper
             .map_intent(tool_name, parameters, user_id, context);
         let action = intent.action.clone();
+        let task_id = self.client.resolve_task_id(&intent);
         let result =
             self.client
                 .check_intent(&intent)
@@ -182,7 +187,7 @@ impl Hook for IronclawSigilHook {
         match result.decision {
             SigilDecision::Approved => Ok(HookOutcome::ok()),
             SigilDecision::Denied | SigilDecision::Pending => {
-                let rejection = build_rejection_context(&result, &action);
+                let rejection = build_rejection_context(&result, &action, Some(&task_id));
                 let reason = serde_json::to_string(&rejection).map_err(|err| {
                     HookError::ExecutionFailed {
                         reason: err.to_string(),

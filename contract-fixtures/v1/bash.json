@@ -4,6 +4,7 @@
   "txCommit": "1111111111111111111111111111111111111111111111111111111111111111",
   "intent": {
     "action": "bash",
-    "command": "ls -la"
+    "command": "ls -la",
+    "task_id": "fixture-task-1"
   }
 }
