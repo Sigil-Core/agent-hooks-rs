@@ -1,0 +1,21 @@
+version = 1
+
+test_patterns = [
+  "**/tests/**",
+]
+
+exclude_patterns = [
+  "**/target/**",
+  "**/*.log",
+]
+
+[[analyzers]]
+name = "rust"
+enabled = true
+
+  [analyzers.meta]
+  msrv = "stable"
+
+[[analyzers]]
+name = "secrets"
+enabled = true
