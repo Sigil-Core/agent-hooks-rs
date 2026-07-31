@@ -44,7 +44,7 @@ Key components:
 
 **`IronclawSigilHook`** -- the `Hook` implementation. Built via `IronclawSigilHook::builder(client)`. If the client was constructed with the default `FrameworkId::AgentHooks`, the builder silently rebinds it to `FrameworkId::Ironclaw` so the authorize request carries the correct framework identifier. Non-tool events (e.g. `SessionStart`) pass through without an authorization call.
 
-**Decision routing:** `APPROVED` returns `HookOutcome::ok()`. Both `DENIED` and `PENDING` return `HookOutcome::reject()` with a JSON-serialized `SigilRejectionContext` as the reason string. PENDING is deliberately not surfaced as a local approval prompt -- the hold must be resolved through Sigil Command.
+**Decision routing:** `APPROVED` returns `HookOutcome::ok()`. Both `DENIED` and `PENDING` return `HookOutcome::reject()` with a JSON-serialized `SigilRejectionContext` as the reason string. `PENDING` is not authorization, and the current task must not retry or execute it. It is deliberately not surfaced as a local approval prompt. If Sign supports a Class 3 resolution, only an authenticated out-of-band decision may permit an exact-intent reauthorization; any attestation issued then is new and separate from the pending result.
 
 **Model budgets:** IronClaw currently exposes `BeforeToolCall` to this adapter.
 It does not expose provider usage before model steps in this crate. Hosts that
