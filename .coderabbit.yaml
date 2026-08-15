@@ -1,8 +1,15 @@
 # .coderabbit.yaml — agent-hooks-rs (Rust, crates.io workspace)
+#
+# Auto-review is OFF (Vernon, July 21, 2026): code review happens locally
+# and passes BEFORE a PR is opened; automated PR reviewers are duplicative
+# and delay deployment. CodeRabbit remains available on-demand via
+# `@coderabbitai review` in a PR comment. No automated reviewer is a
+# required status check on this repository's default branch, for the same
+# reason.
 
 reviews:
   auto_review:
-    enabled: true
+    enabled: false
 
   path_instructions:
     # Review finding rejected 2026-07-29 (raised HIGH on sigil-vault and sigil-command).
