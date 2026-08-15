@@ -168,7 +168,24 @@ impl WithModelUsage for SigilIntent {
         mut self,
         report: Option<SigilModelUsageReport>,
     ) -> Result<SigilIntent, SigilClientError> {
-        self.metadata = report.map(|report| json!({ "model_usage": report }));
+        let Some(report) = report else {
+            return Ok(self);
+        };
+        match self.metadata.as_mut() {
+            None => self.metadata = Some(json!({ "model_usage": report })),
+            Some(serde_json::Value::Object(metadata)) => {
+                metadata.insert(
+                    "model_usage".to_string(),
+                    serde_json::to_value(report).map_err(SigilClientError::Serialize)?,
+                );
+            }
+            Some(_) => {
+                return Err(SigilClientError::InvalidConfig {
+                    field: "intent.metadata",
+                    message: "must be a JSON object when present".to_string(),
+                });
+            }
+        }
         Ok(self)
     }
 }
@@ -326,6 +343,37 @@ mod tests {
         assert_eq!(report.output_tokens, Some(3));
         assert_eq!(report.total_tokens, 15);
         assert_eq!(report.estimated_spend_usd.as_deref(), Some("0.1425"));
+    }
+
+    #[test]
+    fn model_usage_merges_into_existing_object_metadata() {
+        let intent = SigilIntent {
+            action: "model.inference".to_string(),
+            metadata: Some(json!({ "trace": "keep" })),
+            ..SigilIntent::default()
+        };
+        let merged = intent
+            .with_model_usage(Some(SigilModelUsageReport {
+                total_tokens: 7,
+                ..SigilModelUsageReport::default()
+            }))
+            .expect("object metadata");
+        assert_eq!(merged.metadata.as_ref().expect("metadata")["trace"], "keep");
+        assert_eq!(
+            merged.metadata.as_ref().expect("metadata")["model_usage"]["total_tokens"],
+            7
+        );
+
+        let invalid = SigilIntent {
+            action: "model.inference".to_string(),
+            metadata: Some(json!("scalar")),
+            ..SigilIntent::default()
+        };
+        assert!(
+            invalid
+                .with_model_usage(Some(SigilModelUsageReport::default()))
+                .is_err()
+        );
     }
 
     #[test]

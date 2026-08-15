@@ -9,6 +9,11 @@ This workspace provides two crates:
 
 The companion TypeScript package lives at [`@sigilcore/agent-hooks`](https://github.com/Sigil-Core/agent-hooks). Both packages share contract fixtures that guarantee wire-format parity (see [architecture.md](./architecture.md)).
 
+Version 0.3.0 adds schema-closed Rust wire types for compiled response-policy
+format 1 and `sof-response-decision/v1`. This is serialization and fixture
+parity only. Neither Rust crate evaluates response policies, inspects tool
+results, or provides native IronClaw response enforcement.
+
 ## Installation
 
 ```toml
@@ -180,12 +185,15 @@ impl ToolIntentMapper for MyMapper {
 | `chain_id` | `Option<u64>` | EVM chain ID for on-chain actions |
 | `command` | `Option<String>` | Shell command (for `bash` actions) |
 | `url` | `Option<String>` | Target URL (for `web_fetch` actions) |
+| `arguments` | `Option<Value>` | Action-specific JSON object; non-object values are rejected |
+| `method` | `Option<HttpMethod>` | Closed uppercase HTTP method, emitted only for action `http` |
 | `path` | `Option<String>` | File path (for `file_write` actions) |
 | `to` | `Option<String>` | Recipient address (for wallet actions) |
 | `amount` | `Option<String>` | Transfer amount (for wallet actions) |
+| `calldata` | `Option<String>` | Normalized EVM calldata included in the legacy intent commitment |
 | `tx_commit` | `Option<String>` | Explicit intent commit hash; auto-generated if omitted |
 | `task_id` | `Option<String>` | Stable task/session id for execution limits and model budgets |
-| `metadata` | `Option<Value>` | Arbitrary JSON metadata forwarded to Sigil |
+| `metadata` | `Option<Value>` | JSON object forwarded to Sigil; non-object values are rejected |
 
 ## Fail Modes
 
@@ -261,6 +269,17 @@ The TypeScript package defaults to `FailMode::Open` for backward compatibility w
 ## Wire Parity
 
 Both this repo and `agent-hooks` (TypeScript) share contract fixtures in `contract-fixtures/v1/` that pin the exact JSON wire format of `/v1/authorize` request bodies. Fixture integrity is verified by SHA-256 checksums in both test suites. A mismatch in either language fails CI.
+
+Release 1 response-wire fixtures live in `contract-fixtures/response-v1/`.
+They pin the Phase 0 intent, envelope, and fixture receipts, canonical Policy
+2.2 source, pg-commit-v1 compiled payload bytes, schema-closed allow/block
+decision records, and negative format/unknown-member cases.
+
+The public `parse_compiled_response_policy_format1` and
+`parse_response_decision_v1` functions validate these closed wire schemas.
+They do not verify JWS signatures and do not evaluate response content.
+Signature verification and TypeScript runtime evaluation remain owned by
+Warrant Core and `@sigilcore/agent-hooks`, respectively.
 
 ## Documentation
 

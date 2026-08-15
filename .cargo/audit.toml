@@ -1,7 +1,9 @@
 [advisories]
 # Tracks the workspace deny.toml advisory ignores. `cargo audit` also scans
 # lockfile-only entries that are outside `cargo deny`'s target graph, so this
-# file includes RUSTSEC-2026-0185 for quinn-proto without adding it to deny.toml.
+# file includes lockfile-only advisories such as RUSTSEC-2026-0185 for
+# quinn-proto and RUSTSEC-2026-0235 for rkyv. Neither crate appears in the
+# selected target and feature graph.
 # See deny.toml for the full justification: ironclaw 0.24.0 is the latest
 # crates.io release and the listed transitive advisories are not reachable from
 # sigil-agent-hooks-ironclaw's hook-type adapter path.
@@ -27,4 +29,6 @@ ignore = [
   "RUSTSEC-2026-0187",
   "RUSTSEC-2026-0188",
   "RUSTSEC-2026-0204",
+  "RUSTSEC-2026-0222",
+  "RUSTSEC-2026-0235",
 ]

@@ -8,6 +8,7 @@
 agent-hooks-rs/
   Cargo.toml                          # workspace root
   contract-fixtures/v1/               # shared wire-format fixtures
+  contract-fixtures/response-v1/      # format-1 source/payload/decision fixtures
   crates/
     sigil-agent-hooks-core/           # generic Sigil client
     sigil-agent-hooks-ironclaw/       # IronClaw Hook trait adapter
@@ -29,6 +30,13 @@ Framework-agnostic Rust client for Sigil Sign. Owns the full authorization lifec
 5. Classify unreachability (network error, timeout, 5xx, non-JSON body, oversized response) through the configured `FailMode` -- `Closed` returns `DENIED` + `SIGIL_UNREACHABLE`; `Open` returns `APPROVED` + `fail_open: true`.
 6. Build structured rejection context (`build_rejection_context`) that agents can consume without parsing free text. Three distinct paths: policy denial, consensus hold (PENDING), and transient unreachability.
 7. Track task-local model usage with `record_model_usage`, `get_model_usage_report`, `clear_model_usage`, and `check_model_budget`. The helper serializes cumulative provider usage under `metadata.model_usage` on `action: "model.inference"` checks.
+8. Parse and serialize the schema-closed compiled response-policy format-1
+   payload and `sof-response-decision/v1` record against checksum-pinned Phase
+   0 fixtures.
+
+Item 8 is a wire boundary only. The core crate does not verify the compact JWS,
+project a tool result, run deterministic response rules, or return a runtime
+response disposition.
 
 Authentication failures (401/403) are classified as `SIGIL_AUTH_FAILURE`, not unreachability, so operators can distinguish credential issues from infrastructure failures in telemetry.
 
@@ -52,6 +60,10 @@ own the IronClaw model loop should wrap provider calls with
 `sigil-agent-hooks-core` model-budget helpers and keep the native hook focused
 on tool-call authorization.
 
+**No native response enforcement:** this crate has no after-tool result hook.
+It does not consume the format-1 response types at runtime and does not claim
+response-policy evaluation parity with the TypeScript package.
+
 ## Wire parity with agent-hooks (TypeScript)
 
 Both repositories share a set of contract fixtures (`contract-fixtures/v1/`) that pin the exact JSON wire format of `/v1/authorize` request bodies. The fixture files are checked into both repos and protected by SHA-256 checksums (`SHA256SUMS`).
@@ -64,6 +76,12 @@ The parity mechanism works as follows:
 4. The TypeScript repo pins the upstream Rust commit in `tests/UPSTREAM_AGENT_HOOKS_RS_COMMIT` so a fixture drift is traceable.
 
 This guarantees that both implementations produce identical authorize requests for the same inputs, which is the minimum bar for cross-language interoperability under a single Sigil policy.
+
+The separate `contract-fixtures/response-v1/` corpus pins the immutable Phase
+0 receipt digests plus canonical Policy 2.2 source, compiled payload, decision,
+and negative vectors. Rust parses and reserializes the positive format-1
+payload and decision records byte for byte and rejects format 2 or undeclared
+members. This demonstrates wire parity, not native policy evaluation.
 
 ## CI pipeline
 
