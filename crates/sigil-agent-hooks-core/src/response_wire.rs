@@ -152,7 +152,9 @@ impl CompiledResponsePolicyFormat1 {
             require(
                 !values.is_empty()
                     && values.iter().all(|value| !value.is_empty())
-                    && all_unique(values),
+                    && values
+                        .windows(2)
+                        .all(|pair| utf16_cmp(&pair[0], &pair[1]) == Ordering::Less),
                 "policy.denyStrings",
             )?;
         }
@@ -253,8 +255,18 @@ impl ResponseDecisionV1 {
             "contentType",
         )?;
         require(self.findings.len() <= 256, "findings")?;
+        let disposition_reason_valid = match (&self.disposition, &self.reason) {
+            (ResponseDispositionV1::Allow, ResponseDecisionReason::None) => true,
+            (ResponseDispositionV1::Block, ResponseDecisionReason::None)
+            | (ResponseDispositionV1::Allow, _) => false,
+            (ResponseDispositionV1::Block, _) => true,
+        };
+        require(disposition_reason_valid, "disposition/reason")?;
         for finding in &self.findings {
-            require(finding.start < finding.end, "finding offsets")?;
+            require(
+                finding.start < finding.end && finding.end <= MAX_SAFE_INTEGER,
+                "finding offsets",
+            )?;
             require(
                 is_lower_hex(&finding.evidence_digest, HEX_64_LEN),
                 "finding evidenceDigest",
@@ -334,13 +346,6 @@ fn require_sorted_unique_nonempty(
                 .all(|pair| utf16_cmp(&pair[0], &pair[1]) == Ordering::Less),
         field,
     )
-}
-
-fn all_unique(values: &[String]) -> bool {
-    let mut sorted = values.to_vec();
-    sorted.sort();
-    sorted.dedup();
-    sorted.len() == values.len()
 }
 
 fn class_name(value: &ResponseClass) -> &'static str {

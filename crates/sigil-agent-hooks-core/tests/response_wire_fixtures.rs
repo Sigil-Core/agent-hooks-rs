@@ -1,5 +1,8 @@
 use sha2::{Digest, Sha256};
-use sigil_agent_hooks_core::{parse_compiled_response_policy_format1, parse_response_decision_v1};
+use sigil_agent_hooks_core::{
+    ResponseDecisionReason, ResponseDispositionV1, parse_compiled_response_policy_format1,
+    parse_response_decision_v1,
+};
 use std::{fs, path::PathBuf};
 
 fn fixture_root() -> PathBuf {
@@ -61,6 +64,31 @@ fn format1_decisions_parse_and_reserialize_byte_identically() {
             "{name}"
         );
     }
+}
+
+#[test]
+fn response_wire_rejects_noncanonical_and_contradictory_values() {
+    let mut policy =
+        parse_compiled_response_policy_format1(&canonical_fixture_bytes("format1-payload.json"))
+            .expect("valid policy");
+    policy.policy.deny_strings = Some(vec!["zeta".to_string(), "alpha".to_string()]);
+    assert!(policy.canonical_bytes().is_err());
+
+    let mut allow =
+        parse_response_decision_v1(&canonical_fixture_bytes("format1-decision-allow.json"))
+            .expect("valid allow decision");
+    allow.reason = ResponseDecisionReason::EvaluatorFailure;
+    assert!(allow.canonical_bytes().is_err());
+
+    let mut block =
+        parse_response_decision_v1(&canonical_fixture_bytes("format1-decision-block.json"))
+            .expect("valid block decision");
+    block.disposition = ResponseDispositionV1::Block;
+    block.reason = ResponseDecisionReason::None;
+    assert!(block.canonical_bytes().is_err());
+    block.reason = ResponseDecisionReason::DeterministicBlock;
+    block.findings[0].end = 9_007_199_254_740_992;
+    assert!(block.canonical_bytes().is_err());
 }
 
 #[test]

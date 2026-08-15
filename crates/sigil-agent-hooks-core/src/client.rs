@@ -68,6 +68,8 @@ struct AuthorizeResponse {
 struct IntentCommitPreimage<'a> {
     action: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
+    arguments: Option<&'a serde_json::Map<String, serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     command: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     url: Option<&'a str>,
@@ -366,6 +368,10 @@ fn generate_intent_commit_at(intent: &SigilIntent, now: u64) -> Result<String, S
     validate_intent(intent)?;
     let preimage = IntentCommitPreimage {
         action: &intent.action,
+        arguments: intent
+            .arguments
+            .as_ref()
+            .and_then(serde_json::Value::as_object),
         command: intent.command.as_deref(),
         url: intent.url.as_deref(),
         method: (intent.action == "http")
@@ -516,6 +522,24 @@ mod tests {
         assert_eq!(
             commit,
             "6fd4947d41a7b08df3fede4821f93f9c92176a828b7fd9669772577a415e0f9d"
+        );
+    }
+
+    #[test]
+    fn generated_commit_binds_arguments() {
+        let first = SigilIntent {
+            action: "custom".to_string(),
+            arguments: Some(serde_json::json!({"query": "first"})),
+            ..SigilIntent::default()
+        };
+        let second = SigilIntent {
+            arguments: Some(serde_json::json!({"query": "second"})),
+            ..first.clone()
+        };
+
+        assert_ne!(
+            generate_intent_commit_at(&first, 1_700_000_000).expect("first commit"),
+            generate_intent_commit_at(&second, 1_700_000_000).expect("second commit")
         );
     }
 
