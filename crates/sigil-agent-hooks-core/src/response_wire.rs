@@ -757,7 +757,12 @@ impl ResponseDecisionV2 {
         )?;
         match (&self.disposition, &self.reason) {
             (ResponseDispositionV2::Allow, ResponseDecisionReasonV2::None) => require(
-                self.redactions.is_empty() && self.redaction_plan_digest.is_none(),
+                self.redactions.is_empty()
+                    && self.redaction_plan_digest.is_none()
+                    && self
+                        .findings
+                        .iter()
+                        .all(|finding| !finding.qualified || finding.observed),
                 "allow redactions",
             )?,
             (ResponseDispositionV2::Redact, ResponseDecisionReasonV2::Redaction) => require(

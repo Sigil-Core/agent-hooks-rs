@@ -194,6 +194,14 @@ fn format2_rejects_hostile_schema_and_contradictory_decisions() {
     observed_scanner_block.findings[0].qualified = true;
     assert!(observed_scanner_block.canonical_bytes().is_err());
 
+    let mut enforced_allow =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-observe.json"))
+            .expect("valid decision");
+    enforced_allow.findings[0].qualified = true;
+    enforced_allow.findings[0].observed = false;
+    enforced_allow.observe.finding_count = 0;
+    assert!(enforced_allow.canonical_bytes().is_err());
+
     let mut scanner_failure = scanner_block.clone();
     scanner_failure.reason = ResponseDecisionReasonV2::ScannerFailure;
     assert!(scanner_failure.canonical_bytes().is_err());
