@@ -14,6 +14,11 @@ format 1 and `sof-response-decision/v1`. This is serialization and fixture
 parity only. Neither Rust crate evaluates response policies, inspects tool
 results, or provides native IronClaw response enforcement.
 
+The coordinated Release 2 candidate extends that schema-only surface to
+compiled response-policy format 2 and `sof-response-decision/v2`, including
+scanner evidence, mapped redaction spans, and observe metadata. It still does
+not evaluate policies, contact a scanner, redact bytes, or enforce responses.
+
 ## Installation
 
 ```toml
@@ -280,6 +285,12 @@ The public `parse_compiled_response_policy_format1` and
 They do not verify JWS signatures and do not evaluate response content.
 Signature verification and TypeScript runtime evaluation remain owned by
 Warrant Core and `@sigilcore/agent-hooks`, respectively.
+
+Release 2 parity fixtures live in `contract-fixtures/response-v2/`. The public
+`parse_compiled_response_policy_format2` and `parse_response_decision_v2`
+functions validate the closed format-2 policy and decision schemas. The corpus
+pins the exact Warrant Core and Agent Hooks candidates, preserves canonical
+payload and decision bytes, and rejects downgrade and unknown-member inputs.
 
 ## Documentation
 

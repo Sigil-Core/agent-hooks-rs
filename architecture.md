@@ -9,6 +9,7 @@ agent-hooks-rs/
   Cargo.toml                          # workspace root
   contract-fixtures/v1/               # shared wire-format fixtures
   contract-fixtures/response-v1/      # format-1 source/payload/decision fixtures
+  contract-fixtures/response-v2/      # format-2 scanner/redaction/observe fixtures
   crates/
     sigil-agent-hooks-core/           # generic Sigil client
     sigil-agent-hooks-ironclaw/       # IronClaw Hook trait adapter
@@ -33,8 +34,11 @@ Framework-agnostic Rust client for Sigil Sign. Owns the full authorization lifec
 8. Parse and serialize the schema-closed compiled response-policy format-1
    payload and `sof-response-decision/v1` record against checksum-pinned Phase
    0 fixtures.
+9. Parse and serialize schema-closed format-2 policy and decision records,
+   including scanner evidence, mapped redactions, and observe metadata, against
+   checksum-pinned Release 2 candidate fixtures.
 
-Item 8 is a wire boundary only. The core crate does not verify the compact JWS,
+Items 8 and 9 are wire boundaries only. The core crate does not verify the compact JWS,
 project a tool result, run deterministic response rules, or return a runtime
 response disposition.
 
@@ -61,8 +65,9 @@ own the IronClaw model loop should wrap provider calls with
 on tool-call authorization.
 
 **No native response enforcement:** this crate has no after-tool result hook.
-It does not consume the format-1 response types at runtime and does not claim
-response-policy evaluation parity with the TypeScript package.
+It does not consume the format-1 or format-2 response types at runtime and does
+not claim response-policy evaluation, scanner, redaction, or enforcement parity
+with the TypeScript package.
 
 ## Wire parity with agent-hooks (TypeScript)
 
@@ -82,6 +87,12 @@ The separate `contract-fixtures/response-v1/` corpus pins the immutable Phase
 and negative vectors. Rust parses and reserializes the positive format-1
 payload and decision records byte for byte and rejects format 2 or undeclared
 members. This demonstrates wire parity, not native policy evaluation.
+
+The `contract-fixtures/response-v2/` corpus pins the exact Release 2 Warrant
+Core and Agent Hooks candidates. Rust parses and reserializes the canonical
+format-2 payload plus redact and observe decisions byte for byte, preserves
+scanner evidence and mapped redaction metadata, and rejects format downgrade
+or undeclared members. This remains schema parity only.
 
 ## CI pipeline
 

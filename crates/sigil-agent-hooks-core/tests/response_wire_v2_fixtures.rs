@@ -1,0 +1,147 @@
+use sha2::{Digest, Sha256};
+use sigil_agent_hooks_core::{
+    ResponseDecisionReasonV2, ResponseDispositionV2, ScannerEvidenceV1,
+    parse_compiled_response_policy_format1, parse_compiled_response_policy_format2,
+    parse_response_decision_v1, parse_response_decision_v2,
+};
+use std::{fs, path::PathBuf};
+
+fn fixture_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../contract-fixtures/response-v2")
+}
+
+fn fixture_bytes(name: &str) -> Vec<u8> {
+    fs::read(fixture_root().join(name)).expect("fixture must exist")
+}
+
+fn canonical_fixture_bytes(name: &str) -> Vec<u8> {
+    let mut bytes = fixture_bytes(name);
+    if bytes.last() == Some(&b'\n') {
+        bytes.pop();
+    }
+    bytes
+}
+
+#[test]
+fn response_v2_fixture_hashes_match_sha256sums_file() {
+    let checksums = fs::read_to_string(fixture_root().join("SHA256SUMS"))
+        .expect("checksum manifest must exist");
+    for line in checksums.lines().filter(|line| !line.trim().is_empty()) {
+        let (expected, file_name) = line.split_once("  ").expect("valid checksum line");
+        let actual = format!("{:x}", Sha256::digest(fixture_bytes(file_name)));
+        assert_eq!(actual, expected, "checksum mismatch for {file_name}");
+    }
+}
+
+#[test]
+fn release_2_candidate_inputs_are_pinned_exactly() {
+    let pins = String::from_utf8(fixture_bytes("UPSTREAM_PINS")).expect("UTF-8 pins");
+    for expected in [
+        "R2_WARRANT_CORE_BASE_HEAD=3f04df5ea7c9585702133fbcc178f1d86bf042fb",
+        "R2_WARRANT_CORE_DIFF_SHA256=f080e6d448a40c931cf56feac78e8f4782286ffb21403f49601edd32958cdd88",
+        "R2_WARRANT_CORE_PACK_SHA256=d26f35f1c8873c46c8506cf28b59b006ec22097cadadd06ec0c0a9da3bd34d82",
+        "R2_AGENT_HOOKS_BASE_HEAD=ad37b082da0370fbd600ddfbb369943a32beadea",
+        "R2_AGENT_HOOKS_CANDIDATE_DIFF_SHA256=c28e4e65af81c8a1f40734d216354474dd5dfa0ae5d9b6350e3678976c1948a1",
+    ] {
+        assert!(pins.contains(expected), "missing exact pin {expected}");
+    }
+}
+
+#[test]
+fn format2_payload_parses_and_reserializes_byte_identically() {
+    let bytes = canonical_fixture_bytes("format2-payload.json");
+    let payload = parse_compiled_response_policy_format2(&bytes).expect("valid format 2");
+    assert_eq!(payload.canonical_bytes().expect("canonical bytes"), bytes);
+}
+
+#[test]
+fn format2_decisions_parse_and_reserialize_byte_identically() {
+    for name in [
+        "format2-decision-redact.json",
+        "format2-decision-observe.json",
+    ] {
+        let bytes = canonical_fixture_bytes(name);
+        let decision = parse_response_decision_v2(&bytes).expect("valid decision v2");
+        assert_eq!(
+            decision.canonical_bytes().expect("canonical bytes"),
+            bytes,
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn format2_contract_preserves_scanner_redaction_and_observe_metadata() {
+    let redact =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-redact.json"))
+            .expect("valid redact decision");
+    assert_eq!(redact.disposition, ResponseDispositionV2::Redact);
+    assert_eq!(redact.reason, ResponseDecisionReasonV2::Redaction);
+    assert_eq!(redact.redactions.len(), 1);
+    assert!(matches!(
+        redact.scanner_evidence,
+        ScannerEvidenceV1::Verified(_)
+    ));
+
+    let observe =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-observe.json"))
+            .expect("valid observe decision");
+    assert_eq!(observe.disposition, ResponseDispositionV2::Allow);
+    assert!(observe.observe.active);
+    assert_eq!(observe.observe.finding_count, 1);
+    assert!(observe.findings[0].observed);
+}
+
+#[test]
+fn versions_and_unknown_members_fail_closed_without_downgrade() {
+    assert!(
+        parse_compiled_response_policy_format1(&fixture_bytes("format2-payload.json")).is_err()
+    );
+    assert!(
+        parse_compiled_response_policy_format2(&fixture_bytes(
+            "../response-v1/format1-payload.json"
+        ))
+        .is_err()
+    );
+    assert!(
+        parse_compiled_response_policy_format2(&fixture_bytes(
+            "negative-payload-unknown-member.json"
+        ))
+        .is_err()
+    );
+    assert!(parse_response_decision_v1(&fixture_bytes("format2-decision-observe.json")).is_err());
+    assert!(
+        parse_response_decision_v2(&fixture_bytes("negative-decision-unknown-member.json"))
+            .is_err()
+    );
+}
+
+#[test]
+fn format2_rejects_hostile_schema_and_contradictory_decisions() {
+    let mut policy =
+        parse_compiled_response_policy_format2(&canonical_fixture_bytes("format2-payload.json"))
+            .expect("valid policy");
+    policy.format_version = 1;
+    assert!(policy.canonical_bytes().is_err());
+
+    let mut decision =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-redact.json"))
+            .expect("valid decision");
+    let mut overlap = decision.redactions[0].clone();
+    overlap.start = decision.redactions[0].end - 1;
+    overlap.end = decision.redactions[0].end + 4;
+    decision.redactions.push(overlap);
+    assert!(decision.canonical_bytes().is_err());
+    decision.redactions.pop();
+    decision.disposition = ResponseDispositionV2::Allow;
+    assert!(decision.canonical_bytes().is_err());
+}
+
+#[test]
+fn canonical_source_fixture_is_release_2_policy_23() {
+    let source = String::from_utf8(fixture_bytes("policy-2.3-source.md")).expect("UTF-8 source");
+    assert!(source.starts_with("version: 2.3.0\n"));
+    assert!(source.contains("response.redact_classes: pii, secret"));
+    assert!(source.contains("response.scanner.required: true"));
+    assert!(source.contains("response.observe_classes: prompt_injection"));
+}
