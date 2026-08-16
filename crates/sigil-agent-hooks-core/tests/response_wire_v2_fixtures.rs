@@ -1,8 +1,8 @@
 use sha2::{Digest, Sha256};
 use sigil_agent_hooks_core::{
-    ResponseDecisionReasonV2, ResponseDispositionV2, ScannerEvidenceV1,
-    parse_compiled_response_policy_format1, parse_compiled_response_policy_format2,
-    parse_response_decision_v1, parse_response_decision_v2,
+    ResponseDecisionReasonV2, ResponseDispositionV2, ScannerEvidenceFailed, ScannerEvidenceV1,
+    ScannerFailedStatus, ScannerFailureReason, parse_compiled_response_policy_format1,
+    parse_compiled_response_policy_format2, parse_response_decision_v1, parse_response_decision_v2,
 };
 use std::{fs, path::PathBuf};
 
@@ -135,6 +135,27 @@ fn format2_rejects_hostile_schema_and_contradictory_decisions() {
     decision.redactions.pop();
     decision.disposition = ResponseDispositionV2::Allow;
     assert!(decision.canonical_bytes().is_err());
+
+    let mut block_redaction_reason =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-redact.json"))
+            .expect("valid decision");
+    block_redaction_reason.disposition = ResponseDispositionV2::Block;
+    block_redaction_reason.redactions.clear();
+    block_redaction_reason.redaction_plan_digest = None;
+    assert!(block_redaction_reason.canonical_bytes().is_err());
+
+    let mut required_scanner_failure =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-observe.json"))
+            .expect("valid decision");
+    required_scanner_failure.scanner_evidence = ScannerEvidenceV1::Failed(ScannerEvidenceFailed {
+        status: ScannerFailedStatus::Failed,
+        reason: ScannerFailureReason::Transport,
+        required: true,
+    });
+    assert!(required_scanner_failure.canonical_bytes().is_err());
+    required_scanner_failure.disposition = ResponseDispositionV2::Block;
+    required_scanner_failure.reason = ResponseDecisionReasonV2::ScannerFailure;
+    assert!(required_scanner_failure.canonical_bytes().is_ok());
 }
 
 #[test]

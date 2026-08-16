@@ -723,7 +723,10 @@ impl ResponseDecisionV2 {
                 "redact plan",
             )?,
             (ResponseDispositionV2::Block, reason)
-                if !matches!(reason, ResponseDecisionReasonV2::None) =>
+                if !matches!(
+                    reason,
+                    ResponseDecisionReasonV2::None | ResponseDecisionReasonV2::Redaction
+                ) =>
             {
                 require(
                     self.redactions.is_empty() && self.redaction_plan_digest.is_none(),
@@ -734,7 +737,15 @@ impl ResponseDecisionV2 {
         }
         match &self.scanner_evidence {
             ScannerEvidenceV1::NoResult(_) => {}
-            ScannerEvidenceV1::Failed(_) => {}
+            ScannerEvidenceV1::Failed(value) => {
+                if value.required {
+                    require(
+                        matches!(self.disposition, ResponseDispositionV2::Block)
+                            && matches!(self.reason, ResponseDecisionReasonV2::ScannerFailure),
+                        "required scanner failure decision",
+                    )?;
+                }
+            }
             ScannerEvidenceV1::Verified(value) => {
                 require(!value.scanner_id.is_empty(), "scannerEvidence.scannerId")?;
                 require(
