@@ -683,7 +683,8 @@ impl ResponseDecisionV2 {
             )?;
             require(!finding.rule_id.is_empty(), "finding ruleId")?;
             match (&finding.source, &finding.confidence) {
-                (ResponseFindingSourceV2::Deterministic, None) => {}
+                (ResponseFindingSourceV2::Deterministic, None)
+                    if finding.ruleset_version == "sof-response-rules-v1" => {}
                 (ResponseFindingSourceV2::Scanner, Some(value)) if valid_confidence(value) => {}
                 _ => return Err(ResponseWireError::Invalid("finding source/confidence")),
             }
@@ -703,7 +704,16 @@ impl ResponseDecisionV2 {
                     && redaction
                         .evidence_digests
                         .windows(2)
-                        .all(|pair| pair[0] < pair[1]),
+                        .all(|pair| pair[0] < pair[1])
+                    && redaction.evidence_digests.iter().all(|digest| {
+                        self.findings.iter().any(|finding| {
+                            finding.qualified
+                                && finding.evidence_digest == *digest
+                                && finding.start < redaction.end
+                                && redaction.start < finding.end
+                                && redaction.classes.contains(&finding.class)
+                        })
+                    }),
                 "redaction evidenceDigests",
             )?;
         }
@@ -781,6 +791,21 @@ impl ResponseDecisionV2 {
                 )?;
             }
         }
+        match &self.reason {
+            ResponseDecisionReasonV2::ScannerBlock => require(
+                matches!(self.scanner_evidence, ScannerEvidenceV1::Verified(_))
+                    && scanner_findings.iter().any(|finding| finding.qualified),
+                "scanner block evidence",
+            )?,
+            ResponseDecisionReasonV2::ScannerFailure => require(
+                matches!(
+                    self.scanner_evidence,
+                    ScannerEvidenceV1::Failed(ScannerEvidenceFailed { required: true, .. })
+                ),
+                "scanner failure evidence",
+            )?,
+            _ => {}
+        }
         require_classes_sorted_unique_allow_empty(&self.observe.classes, "observe.classes")?;
         require(self.observe.finding_count <= 256, "observe.findingCount")?;
         require(
@@ -791,6 +816,13 @@ impl ResponseDecisionV2 {
                     .filter(|finding| finding.observed)
                     .count(),
             "observe.findingCount",
+        )?;
+        require(
+            self.findings.iter().all(|finding| {
+                !finding.observed
+                    || (self.observe.active && self.observe.classes.contains(&finding.class))
+            }),
+            "observe findings",
         )?;
         match (&self.observe.until, self.observe.active) {
             (Some(value), _) => require(canonical_utc_seconds(value), "observe.until")?,

@@ -1,8 +1,8 @@
 use sha2::{Digest, Sha256};
 use sigil_agent_hooks_core::{
-    ResponseDecisionReasonV2, ResponseDispositionV2, ScannerEvidenceFailed,
-    ScannerEvidenceNoResult, ScannerEvidenceV1, ScannerFailedStatus, ScannerFailureReason,
-    ScannerNoResultStatus, parse_compiled_response_policy_format1,
+    ResponseClass, ResponseDecisionReasonV2, ResponseDispositionV2, ResponseFindingSourceV2,
+    ScannerEvidenceFailed, ScannerEvidenceNoResult, ScannerEvidenceV1, ScannerFailedStatus,
+    ScannerFailureReason, ScannerNoResultStatus, parse_compiled_response_policy_format1,
     parse_compiled_response_policy_format2, parse_response_decision_v1, parse_response_decision_v2,
 };
 use std::{fs, path::PathBuf};
@@ -175,6 +175,42 @@ fn format2_rejects_hostile_schema_and_contradictory_decisions() {
             .expect("valid decision");
     mismatched_ruleset.findings[0].ruleset_version = "different-ruleset".to_string();
     assert!(mismatched_ruleset.canonical_bytes().is_err());
+
+    let mut deterministic_ruleset =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-observe.json"))
+            .expect("valid decision");
+    deterministic_ruleset.findings[0].source = ResponseFindingSourceV2::Deterministic;
+    deterministic_ruleset.findings[0].confidence = None;
+    assert!(deterministic_ruleset.canonical_bytes().is_err());
+
+    let mut scanner_block =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-observe.json"))
+            .expect("valid decision");
+    scanner_block.disposition = ResponseDispositionV2::Block;
+    scanner_block.reason = ResponseDecisionReasonV2::ScannerBlock;
+    assert!(scanner_block.canonical_bytes().is_err());
+
+    let mut scanner_failure = scanner_block.clone();
+    scanner_failure.reason = ResponseDecisionReasonV2::ScannerFailure;
+    assert!(scanner_failure.canonical_bytes().is_err());
+
+    let mut arbitrary_redaction =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-redact.json"))
+            .expect("valid decision");
+    arbitrary_redaction.redactions[0].evidence_digests[0] = "d".repeat(64);
+    assert!(arbitrary_redaction.canonical_bytes().is_err());
+
+    let mut inactive_observation =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-observe.json"))
+            .expect("valid decision");
+    inactive_observation.observe.active = false;
+    assert!(inactive_observation.canonical_bytes().is_err());
+
+    let mut unrelated_observation =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-observe.json"))
+            .expect("valid decision");
+    unrelated_observation.observe.classes = vec![ResponseClass::Secret];
+    assert!(unrelated_observation.canonical_bytes().is_err());
 }
 
 #[test]
