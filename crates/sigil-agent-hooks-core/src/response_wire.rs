@@ -115,6 +115,7 @@ impl CompiledResponsePolicyFormat1 {
         canonical_json_bytes(&value)
     }
 
+    // skipcq: RS-R1000 - Format-1 envelope invariants remain one ordered fail-closed wire-validation boundary.
     pub fn validate(&self) -> Result<(), ResponseWireError> {
         require(self.kind == "CompiledResponsePolicy", "kind")?;
         require(self.format_version == 1, "formatVersion")?;
@@ -239,6 +240,7 @@ impl CompiledResponsePolicyFormat2 {
         canonical_json_bytes(&serde_json::to_value(self)?)
     }
 
+    // skipcq: RS-R1000 - Format-2 envelope invariants remain one ordered fail-closed wire-validation boundary.
     pub fn validate(&self) -> Result<(), ResponseWireError> {
         require(self.kind == "CompiledResponsePolicy", "kind")?;
         require(self.format_version == 2, "formatVersion")?;
@@ -586,6 +588,7 @@ impl ResponseDecisionV1 {
         serde_json::to_vec(self).map_err(ResponseWireError::Json)
     }
 
+    // skipcq: RS-R1000 - Response-decision bindings and precedence remain one ordered fail-closed wire-validation boundary.
     pub fn validate(&self) -> Result<(), ResponseWireError> {
         require(self.schema == "sof-response-decision/v1", "schema")?;
         require(self.format_version == 1, "formatVersion")?;
