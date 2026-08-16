@@ -739,9 +739,17 @@ impl ResponseDecisionV2 {
             }
             _ => return Err(ResponseWireError::Invalid("disposition/reason")),
         }
+        let scanner_findings = self
+            .findings
+            .iter()
+            .filter(|finding| matches!(finding.source, ResponseFindingSourceV2::Scanner))
+            .collect::<Vec<_>>();
         match &self.scanner_evidence {
-            ScannerEvidenceV1::NoResult(_) => {}
+            ScannerEvidenceV1::NoResult(_) => {
+                require(scanner_findings.is_empty(), "scannerEvidence findings")?;
+            }
             ScannerEvidenceV1::Failed(value) => {
+                require(scanner_findings.is_empty(), "scannerEvidence findings")?;
                 if value.required {
                     require(
                         matches!(self.disposition, ResponseDispositionV2::Block)
@@ -762,15 +770,14 @@ impl ResponseDecisionV2 {
                 )?;
                 require(
                     value.finding_count <= 256
-                        && value.finding_count as usize
-                            == self
-                                .findings
-                                .iter()
-                                .filter(|finding| {
-                                    matches!(finding.source, ResponseFindingSourceV2::Scanner)
-                                })
-                                .count(),
+                        && value.finding_count as usize == scanner_findings.len(),
                     "scannerEvidence.findingCount",
+                )?;
+                require(
+                    scanner_findings
+                        .iter()
+                        .all(|finding| finding.ruleset_version == value.ruleset_version),
+                    "scannerEvidence.rulesetVersion",
                 )?;
             }
         }

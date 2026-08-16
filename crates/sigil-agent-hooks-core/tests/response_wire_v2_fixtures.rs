@@ -1,7 +1,8 @@
 use sha2::{Digest, Sha256};
 use sigil_agent_hooks_core::{
-    ResponseDecisionReasonV2, ResponseDispositionV2, ScannerEvidenceFailed, ScannerEvidenceV1,
-    ScannerFailedStatus, ScannerFailureReason, parse_compiled_response_policy_format1,
+    ResponseDecisionReasonV2, ResponseDispositionV2, ScannerEvidenceFailed,
+    ScannerEvidenceNoResult, ScannerEvidenceV1, ScannerFailedStatus, ScannerFailureReason,
+    ScannerNoResultStatus, parse_compiled_response_policy_format1,
     parse_compiled_response_policy_format2, parse_response_decision_v1, parse_response_decision_v2,
 };
 use std::{fs, path::PathBuf};
@@ -155,7 +156,25 @@ fn format2_rejects_hostile_schema_and_contradictory_decisions() {
     assert!(required_scanner_failure.canonical_bytes().is_err());
     required_scanner_failure.disposition = ResponseDispositionV2::Block;
     required_scanner_failure.reason = ResponseDecisionReasonV2::ScannerFailure;
+    assert!(required_scanner_failure.canonical_bytes().is_err());
+    required_scanner_failure.findings.clear();
+    required_scanner_failure.observe.finding_count = 0;
     assert!(required_scanner_failure.canonical_bytes().is_ok());
+
+    let mut unverified_scanner_finding =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-redact.json"))
+            .expect("valid decision");
+    unverified_scanner_finding.scanner_evidence =
+        ScannerEvidenceV1::NoResult(ScannerEvidenceNoResult {
+            status: ScannerNoResultStatus::SkippedTerminal,
+        });
+    assert!(unverified_scanner_finding.canonical_bytes().is_err());
+
+    let mut mismatched_ruleset =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-redact.json"))
+            .expect("valid decision");
+    mismatched_ruleset.findings[0].ruleset_version = "different-ruleset".to_string();
+    assert!(mismatched_ruleset.canonical_bytes().is_err());
 }
 
 #[test]
