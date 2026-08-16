@@ -200,6 +200,13 @@ fn format2_rejects_hostile_schema_and_contradictory_decisions() {
     arbitrary_redaction.redactions[0].evidence_digests[0] = "d".repeat(64);
     assert!(arbitrary_redaction.canonical_bytes().is_err());
 
+    let mut partial_redaction =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-redact.json"))
+            .expect("valid decision");
+    partial_redaction.redactions[0].start += 1;
+    partial_redaction.redactions[0].end -= 1;
+    assert!(partial_redaction.canonical_bytes().is_err());
+
     let mut inactive_observation =
         parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-observe.json"))
             .expect("valid decision");
@@ -211,6 +218,26 @@ fn format2_rejects_hostile_schema_and_contradictory_decisions() {
             .expect("valid decision");
     unrelated_observation.observe.classes = vec![ResponseClass::Secret];
     assert!(unrelated_observation.canonical_bytes().is_err());
+
+    let mut skipped_allow =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-observe.json"))
+            .expect("valid decision");
+    skipped_allow.findings.clear();
+    skipped_allow.observe.finding_count = 0;
+    skipped_allow.scanner_evidence = ScannerEvidenceV1::NoResult(ScannerEvidenceNoResult {
+        status: ScannerNoResultStatus::SkippedTerminal,
+    });
+    assert!(skipped_allow.canonical_bytes().is_err());
+
+    let mut active_expired = skipped_allow.clone();
+    active_expired.scanner_evidence = ScannerEvidenceV1::NoResult(ScannerEvidenceNoResult {
+        status: ScannerNoResultStatus::NotConfigured,
+    });
+    active_expired.disposition = ResponseDispositionV2::Block;
+    active_expired.reason = ResponseDecisionReasonV2::ObserveExpired;
+    assert!(active_expired.canonical_bytes().is_err());
+    active_expired.observe.active = false;
+    assert!(active_expired.canonical_bytes().is_ok());
 }
 
 #[test]

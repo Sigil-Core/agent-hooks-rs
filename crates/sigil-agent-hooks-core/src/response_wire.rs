@@ -709,8 +709,8 @@ impl ResponseDecisionV2 {
                         self.findings.iter().any(|finding| {
                             finding.qualified
                                 && finding.evidence_digest == *digest
-                                && finding.start < redaction.end
-                                && redaction.start < finding.end
+                                && redaction.start <= finding.start
+                                && redaction.end >= finding.end
                                 && redaction.classes.contains(&finding.class)
                         })
                     }),
@@ -755,8 +755,35 @@ impl ResponseDecisionV2 {
             .filter(|finding| matches!(finding.source, ResponseFindingSourceV2::Scanner))
             .collect::<Vec<_>>();
         match &self.scanner_evidence {
-            ScannerEvidenceV1::NoResult(_) => {
+            ScannerEvidenceV1::NoResult(value) => {
                 require(scanner_findings.is_empty(), "scannerEvidence findings")?;
+                if matches!(value.status, ScannerNoResultStatus::SkippedTerminal) {
+                    require(
+                        matches!(
+                            (&self.disposition, &self.reason),
+                            (
+                                ResponseDispositionV2::Redact,
+                                ResponseDecisionReasonV2::Redaction
+                            ) | (
+                                ResponseDispositionV2::Block,
+                                ResponseDecisionReasonV2::DeterministicBlock
+                                    | ResponseDecisionReasonV2::ResponseLiteral
+                                    | ResponseDecisionReasonV2::UnsupportedBinaryResult
+                                    | ResponseDecisionReasonV2::ProjectionLimit
+                                    | ResponseDecisionReasonV2::NestingLimit
+                                    | ResponseDecisionReasonV2::EvaluatorFailure
+                                    | ResponseDecisionReasonV2::BindingMismatch
+                                    | ResponseDecisionReasonV2::LegacyUnsupported
+                                    | ResponseDecisionReasonV2::EnvelopeInvalid
+                                    | ResponseDecisionReasonV2::Replay
+                                    | ResponseDecisionReasonV2::Duplicate
+                                    | ResponseDecisionReasonV2::Cancelled
+                                    | ResponseDecisionReasonV2::TimedOut
+                            )
+                        ),
+                        "skipped terminal decision",
+                    )?;
+                }
             }
             ScannerEvidenceV1::Failed(value) => {
                 require(scanner_findings.is_empty(), "scannerEvidence findings")?;
@@ -828,6 +855,12 @@ impl ResponseDecisionV2 {
             (Some(value), _) => require(canonical_utc_seconds(value), "observe.until")?,
             (None, false) => {}
             (None, true) => return Err(ResponseWireError::Invalid("observe.active")),
+        }
+        if matches!(self.reason, ResponseDecisionReasonV2::ObserveExpired) {
+            require(
+                !self.observe.active && self.observe.until.is_some(),
+                "observe expired metadata",
+            )?;
         }
         Ok(())
     }
