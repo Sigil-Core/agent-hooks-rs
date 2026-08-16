@@ -81,16 +81,31 @@ pub enum SigilDecision {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SigilIntent {
     pub action: String,
+    pub arguments: Option<serde_json::Value>,
     pub agent_id: Option<String>,
     pub chain_id: Option<u64>,
     pub command: Option<String>,
     pub url: Option<String>,
+    pub method: Option<HttpMethod>,
     pub path: Option<String>,
     pub to: Option<String>,
     pub amount: Option<String>,
+    pub calldata: Option<String>,
     pub tx_commit: Option<String>,
     pub task_id: Option<String>,
     pub metadata: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum HttpMethod {
+    Get,
+    Head,
+    Options,
+    Post,
+    Put,
+    Patch,
+    Delete,
 }
 
 #[derive(Debug, Clone)]

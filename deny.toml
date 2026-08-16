@@ -38,6 +38,8 @@ version = 2
 #     HookPoint). No IronClaw model runner, PDF parser, terminal renderer,
 #     QUIC endpoint, `Engine`, `Module`, or `Linker` is constructed.
 #   * No WASM module is ever instantiated through this code path.
+#   * RUSTSEC-2026-0222 requires stores and types from distinct Wasmtime
+#     engines. This adapter constructs no Engine, Store, Module, or component.
 #   * `ironclaw` 0.24.0 enables `wasmtime` with `features = ["component-model"]`
 #     on top of defaults. Winch is NOT in wasmtime 28's default feature set and
 #     is NOT explicitly enabled, so RUSTSEC-2026-0095 (Winch sandbox escape)
@@ -45,6 +47,9 @@ version = 2
 #   * RUSTSEC-2026-0096 (aarch64 Cranelift miscompile) requires wasmtime
 #     execution on aarch64. CI runs x86_64 ubuntu-latest and the Sigil call
 #     path never executes wasmtime regardless of arch.
+#   * RUSTSEC-2026-0235 applies to rkyv 0.7, which is present only as an
+#     optional rust_decimal dependency in Cargo.lock. The IronClaw-selected
+#     rust_decimal feature graph does not compile rkyv.
 # Track: https://github.com/nearai/ironclaw — bump to 0.25.0 when published.
 ignore = [
   "RUSTSEC-2024-0436",
@@ -69,4 +74,6 @@ ignore = [
   "RUSTSEC-2026-0187",
   "RUSTSEC-2026-0188",
   "RUSTSEC-2026-0204",
+  "RUSTSEC-2026-0222",
+  "RUSTSEC-2026-0235",
 ]

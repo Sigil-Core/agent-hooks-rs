@@ -31,15 +31,21 @@ struct AuthorizeRequest<'a> {
 struct AuthorizeIntent<'a> {
     action: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
+    arguments: Option<&'a serde_json::Map<String, serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     command: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     url: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    method: Option<&'a crate::HttpMethod>,
     #[serde(skip_serializing_if = "Option::is_none")]
     path: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     target_address: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     amount: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    calldata: Option<&'a str>,
     #[serde(rename = "task_id", skip_serializing_if = "Option::is_none")]
     task_id: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -62,15 +68,21 @@ struct AuthorizeResponse {
 struct IntentCommitPreimage<'a> {
     action: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
+    arguments: Option<&'a serde_json::Map<String, serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     command: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     url: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    method: Option<&'a crate::HttpMethod>,
     #[serde(skip_serializing_if = "Option::is_none")]
     path: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     to: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     amount: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    calldata: Option<&'a str>,
     ts: u64,
 }
 
@@ -190,6 +202,7 @@ impl SigilClient {
         intent: &SigilIntent,
         now: u64,
     ) -> Result<String, SigilClientError> {
+        validate_intent(intent)?;
         let tx_commit = match intent.tx_commit.as_deref() {
             Some(value) => Some(value.to_string()),
             None => Some(generate_intent_commit_at(intent, now)?),
@@ -207,11 +220,19 @@ impl SigilClient {
             chain_id: intent.chain_id,
             intent: AuthorizeIntent {
                 action: &intent.action,
+                arguments: intent
+                    .arguments
+                    .as_ref()
+                    .and_then(serde_json::Value::as_object),
                 command: intent.command.as_deref(),
                 url: intent.url.as_deref(),
+                method: (intent.action == "http")
+                    .then_some(intent.method.as_ref())
+                    .flatten(),
                 path: intent.path.as_deref(),
                 target_address: intent.to.as_deref(),
                 amount: intent.amount.as_deref(),
+                calldata: intent.calldata.as_deref(),
                 task_id: Some(task_id.as_str()),
                 metadata: intent.metadata.as_ref(),
             },
@@ -344,18 +365,66 @@ fn default_task_id() -> String {
 }
 
 fn generate_intent_commit_at(intent: &SigilIntent, now: u64) -> Result<String, SigilClientError> {
+    validate_intent(intent)?;
     let preimage = IntentCommitPreimage {
         action: &intent.action,
+        arguments: intent
+            .arguments
+            .as_ref()
+            .and_then(serde_json::Value::as_object),
         command: intent.command.as_deref(),
         url: intent.url.as_deref(),
+        method: (intent.action == "http")
+            .then_some(intent.method.as_ref())
+            .flatten(),
         path: intent.path.as_deref(),
         to: intent.to.as_deref(),
         amount: intent.amount.as_deref(),
+        calldata: intent.calldata.as_deref(),
         ts: now,
     };
     let bytes = serde_json::to_vec(&preimage).map_err(SigilClientError::Serialize)?;
     let digest = Sha256::digest(bytes);
     Ok(format!("{digest:x}"))
+}
+
+fn validate_intent(intent: &SigilIntent) -> Result<(), SigilClientError> {
+    if intent.action.is_empty() {
+        return Err(SigilClientError::InvalidConfig {
+            field: "intent.action",
+            message: "must be a non-empty string".to_string(),
+        });
+    }
+    if intent
+        .chain_id
+        .is_some_and(|value| value > 9_007_199_254_740_991)
+    {
+        return Err(SigilClientError::InvalidConfig {
+            field: "intent.chain_id",
+            message: "must be within the shared JavaScript safe-integer domain".to_string(),
+        });
+    }
+    if intent
+        .arguments
+        .as_ref()
+        .is_some_and(|value| !value.is_object())
+    {
+        return Err(SigilClientError::InvalidConfig {
+            field: "intent.arguments",
+            message: "must be a JSON object when present".to_string(),
+        });
+    }
+    if intent
+        .metadata
+        .as_ref()
+        .is_some_and(|value| !value.is_object())
+    {
+        return Err(SigilClientError::InvalidConfig {
+            field: "intent.metadata",
+            message: "must be a JSON object when present".to_string(),
+        });
+    }
+    Ok(())
 }
 
 async fn read_response_body(response: &mut reqwest::Response) -> Result<Vec<u8>, String> {
@@ -383,7 +452,7 @@ async fn read_response_body(response: &mut reqwest::Response) -> Result<Vec<u8>,
 #[cfg(test)]
 mod tests {
     use super::generate_intent_commit_at;
-    use crate::{FrameworkId, SigilClient, SigilIntent};
+    use crate::{FrameworkId, HttpMethod, SigilClient, SigilIntent};
     use axum::{Router, body::Bytes, extract::State, http::StatusCode, routing::post};
     use std::sync::{Arc, Mutex};
     use tokio::{net::TcpListener, sync::oneshot};
@@ -456,6 +525,24 @@ mod tests {
         );
     }
 
+    #[test]
+    fn generated_commit_binds_arguments() {
+        let first = SigilIntent {
+            action: "custom".to_string(),
+            arguments: Some(serde_json::json!({"query": "first"})),
+            ..SigilIntent::default()
+        };
+        let second = SigilIntent {
+            arguments: Some(serde_json::json!({"query": "second"})),
+            ..first.clone()
+        };
+
+        assert_ne!(
+            generate_intent_commit_at(&first, 1_700_000_000).expect("first commit"),
+            generate_intent_commit_at(&second, 1_700_000_000).expect("second commit")
+        );
+    }
+
     #[tokio::test]
     async fn auto_generated_commit_matches_wire_fixture_with_pinned_timestamp() {
         let server = spawn().await;
@@ -494,5 +581,136 @@ mod tests {
                 .as_str()
                 .is_some_and(|value| value.starts_with("rust-task-"))
         );
+    }
+
+    #[test]
+    fn generated_commit_includes_action_gated_method_and_calldata() {
+        let intent = SigilIntent {
+            action: "http".to_string(),
+            url: Some("https://example.test".to_string()),
+            method: Some(HttpMethod::Post),
+            calldata: Some("0xdeadbeef".to_string()),
+            ..SigilIntent::default()
+        };
+        assert_eq!(
+            generate_intent_commit_at(&intent, 1_700_000_000).expect("commit"),
+            "06a913719e8674cd932d5b9e89592950ce6b8f728d4ac2a9494f22eedb98e0fa"
+        );
+    }
+
+    #[tokio::test]
+    async fn intent_bridge_fields_match_the_frozen_wire_contract() {
+        let server = spawn().await;
+        let client = SigilClient::builder("sk_fixture")
+            .api_url(server.base_url.clone())
+            .agent_id("fixture-agent")
+            .task_id("fixture-task")
+            .framework(FrameworkId::AgentHooks)
+            .build()
+            .expect("client should build");
+        let intent = SigilIntent {
+            action: "http".to_string(),
+            arguments: Some(serde_json::json!({"query": "status"})),
+            url: Some("https://example.test".to_string()),
+            method: Some(HttpMethod::Delete),
+            calldata: Some("0xdeadbeef".to_string()),
+            tx_commit: Some("1".repeat(64)),
+            ..SigilIntent::default()
+        };
+
+        client
+            .check_intent(&intent)
+            .await
+            .expect("request should succeed");
+        let body: serde_json::Value = serde_json::from_str(
+            server
+                .captures
+                .lock()
+                .expect("capture lock")
+                .first()
+                .expect("captured body"),
+        )
+        .expect("JSON body");
+        assert_eq!(
+            body["intent"]["arguments"],
+            serde_json::json!({"query": "status"})
+        );
+        assert_eq!(body["intent"]["method"], "DELETE");
+        assert_eq!(body["intent"]["calldata"], "0xdeadbeef");
+    }
+
+    #[tokio::test]
+    async fn method_is_absent_for_non_http_actions() {
+        let server = spawn().await;
+        let client = SigilClient::builder("sk_fixture")
+            .api_url(server.base_url.clone())
+            .task_id("fixture-task")
+            .build()
+            .expect("client should build");
+        let intent = SigilIntent {
+            action: "web_fetch".to_string(),
+            method: Some(HttpMethod::Get),
+            tx_commit: Some("2".repeat(64)),
+            ..SigilIntent::default()
+        };
+
+        client
+            .check_intent(&intent)
+            .await
+            .expect("request should succeed");
+        let body: serde_json::Value = serde_json::from_str(
+            server
+                .captures
+                .lock()
+                .expect("capture lock")
+                .first()
+                .expect("captured body"),
+        )
+        .expect("JSON body");
+        assert!(body["intent"].get("method").is_none());
+    }
+
+    #[test]
+    fn all_frozen_http_methods_are_closed_uppercase_values() {
+        for (method, expected) in [
+            (HttpMethod::Get, "\"GET\""),
+            (HttpMethod::Head, "\"HEAD\""),
+            (HttpMethod::Options, "\"OPTIONS\""),
+            (HttpMethod::Post, "\"POST\""),
+            (HttpMethod::Put, "\"PUT\""),
+            (HttpMethod::Patch, "\"PATCH\""),
+            (HttpMethod::Delete, "\"DELETE\""),
+        ] {
+            assert_eq!(
+                serde_json::to_string(&method).expect("method JSON"),
+                expected
+            );
+        }
+        assert!(serde_json::from_str::<HttpMethod>("\"get\"").is_err());
+        assert!(serde_json::from_str::<HttpMethod>("\"TRACE\"").is_err());
+    }
+
+    #[test]
+    fn invalid_shared_intent_shapes_are_rejected_before_serialization() {
+        for intent in [
+            SigilIntent::default(),
+            SigilIntent {
+                action: "custom".to_string(),
+                arguments: Some(serde_json::json!("not an object")),
+                ..SigilIntent::default()
+            },
+            SigilIntent {
+                action: "custom".to_string(),
+                metadata: Some(serde_json::json!([])),
+                ..SigilIntent::default()
+            },
+            SigilIntent {
+                action: "custom".to_string(),
+                chain_id: Some(9_007_199_254_740_992),
+                ..SigilIntent::default()
+            },
+        ] {
+            assert!(generate_intent_commit_at(&intent, 1_700_000_000).is_err());
+        }
     }
 }

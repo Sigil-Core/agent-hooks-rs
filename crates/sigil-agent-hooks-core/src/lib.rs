@@ -1,6 +1,7 @@
 mod client;
 mod model_usage;
 mod rejection;
+mod response_wire;
 mod types;
 
 pub use model_usage::{
@@ -8,10 +9,16 @@ pub use model_usage::{
     record_model_usage,
 };
 pub use rejection::build_rejection_context;
+pub use response_wire::{
+    CompiledResponsePolicyBounds, CompiledResponsePolicyFormat1,
+    CompiledResponsePolicyFormat1Policy, ResponseClass, ResponseDecisionReason, ResponseDecisionV1,
+    ResponseDispositionV1, ResponseFinding, ResponseManifestBinding, ResponseWireError,
+    parse_compiled_response_policy_format1, parse_response_decision_v1,
+};
 pub use types::{
-    FailMode, FrameworkId, SigilClient, SigilClientBuilder, SigilClientError, SigilConfig,
-    SigilDecision, SigilIntent, SigilModelUsage, SigilModelUsageError, SigilModelUsageReport,
-    SigilRejectionContext, SigilResult,
+    FailMode, FrameworkId, HttpMethod, SigilClient, SigilClientBuilder, SigilClientError,
+    SigilConfig, SigilDecision, SigilIntent, SigilModelUsage, SigilModelUsageError,
+    SigilModelUsageReport, SigilRejectionContext, SigilResult,
 };
 
 pub const SIGIL_UNREACHABLE: &str = "SIGIL_UNREACHABLE";
