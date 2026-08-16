@@ -723,6 +723,25 @@ impl ResponseDecisionV2 {
                 .all(|pair| pair[0].end <= pair[1].start),
             "redaction overlap",
         )?;
+        require(
+            self.findings.iter().all(|finding| {
+                !finding.qualified
+                    || finding.observed
+                    || !self
+                        .redactions
+                        .iter()
+                        .any(|redaction| redaction.classes.contains(&finding.class))
+                    || self.redactions.iter().any(|redaction| {
+                        redaction.start <= finding.start
+                            && redaction.end >= finding.end
+                            && redaction.classes.contains(&finding.class)
+                            && redaction
+                                .evidence_digests
+                                .contains(&finding.evidence_digest)
+                    })
+            }),
+            "redaction finding coverage",
+        )?;
         match (&self.disposition, &self.reason) {
             (ResponseDispositionV2::Allow, ResponseDecisionReasonV2::None) => require(
                 self.redactions.is_empty() && self.redaction_plan_digest.is_none(),
@@ -821,7 +840,9 @@ impl ResponseDecisionV2 {
         match &self.reason {
             ResponseDecisionReasonV2::ScannerBlock => require(
                 matches!(self.scanner_evidence, ScannerEvidenceV1::Verified(_))
-                    && scanner_findings.iter().any(|finding| finding.qualified),
+                    && scanner_findings
+                        .iter()
+                        .any(|finding| finding.qualified && !finding.observed),
                 "scanner block evidence",
             )?,
             ResponseDecisionReasonV2::ScannerFailure => require(
@@ -856,11 +877,19 @@ impl ResponseDecisionV2 {
             (None, false) => {}
             (None, true) => return Err(ResponseWireError::Invalid("observe.active")),
         }
-        if matches!(self.reason, ResponseDecisionReasonV2::ObserveExpired) {
+        if self.observe.until.is_some() && !self.observe.active {
             require(
-                !self.observe.active && self.observe.until.is_some(),
+                matches!(
+                    (&self.disposition, &self.reason),
+                    (
+                        ResponseDispositionV2::Block,
+                        ResponseDecisionReasonV2::ObserveExpired
+                    )
+                ),
                 "observe expired metadata",
             )?;
+        } else if matches!(self.reason, ResponseDecisionReasonV2::ObserveExpired) {
+            return Err(ResponseWireError::Invalid("observe expired metadata"));
         }
         Ok(())
     }

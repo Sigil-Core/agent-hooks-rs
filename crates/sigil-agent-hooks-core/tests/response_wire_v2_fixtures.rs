@@ -190,6 +190,10 @@ fn format2_rejects_hostile_schema_and_contradictory_decisions() {
     scanner_block.reason = ResponseDecisionReasonV2::ScannerBlock;
     assert!(scanner_block.canonical_bytes().is_err());
 
+    let mut observed_scanner_block = scanner_block.clone();
+    observed_scanner_block.findings[0].qualified = true;
+    assert!(observed_scanner_block.canonical_bytes().is_err());
+
     let mut scanner_failure = scanner_block.clone();
     scanner_failure.reason = ResponseDecisionReasonV2::ScannerFailure;
     assert!(scanner_failure.canonical_bytes().is_err());
@@ -206,6 +210,20 @@ fn format2_rejects_hostile_schema_and_contradictory_decisions() {
     partial_redaction.redactions[0].start += 1;
     partial_redaction.redactions[0].end -= 1;
     assert!(partial_redaction.canonical_bytes().is_err());
+
+    let mut uncovered_redaction =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-redact.json"))
+            .expect("valid decision");
+    let mut uncovered_finding = uncovered_redaction.findings[0].clone();
+    uncovered_finding.start = 32;
+    uncovered_finding.end = 40;
+    uncovered_finding.evidence_digest = "c".repeat(64);
+    uncovered_finding.rule_id = "scanner:operator-scanner-1:1".to_string();
+    uncovered_redaction.findings.push(uncovered_finding);
+    if let ScannerEvidenceV1::Verified(evidence) = &mut uncovered_redaction.scanner_evidence {
+        evidence.finding_count = 2;
+    }
+    assert!(uncovered_redaction.canonical_bytes().is_err());
 
     let mut inactive_observation =
         parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-observe.json"))
@@ -238,6 +256,14 @@ fn format2_rejects_hostile_schema_and_contradictory_decisions() {
     assert!(active_expired.canonical_bytes().is_err());
     active_expired.observe.active = false;
     assert!(active_expired.canonical_bytes().is_ok());
+
+    let mut inactive_allow =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-observe.json"))
+            .expect("valid decision");
+    inactive_allow.observe.active = false;
+    inactive_allow.observe.finding_count = 0;
+    inactive_allow.findings[0].observed = false;
+    assert!(inactive_allow.canonical_bytes().is_err());
 }
 
 #[test]
