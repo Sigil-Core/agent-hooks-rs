@@ -708,10 +708,23 @@ impl ResponseDecisionV2 {
                     && redaction.evidence_digests.iter().all(|digest| {
                         self.findings.iter().any(|finding| {
                             finding.qualified
+                                && !finding.observed
                                 && finding.evidence_digest == *digest
                                 && redaction.start <= finding.start
                                 && redaction.end >= finding.end
                                 && redaction.classes.contains(&finding.class)
+                        })
+                    })
+                    && redaction.classes.iter().all(|class| {
+                        self.findings.iter().any(|finding| {
+                            finding.qualified
+                                && !finding.observed
+                                && finding.class == *class
+                                && redaction.start <= finding.start
+                                && redaction.end >= finding.end
+                                && redaction
+                                    .evidence_digests
+                                    .contains(&finding.evidence_digest)
                         })
                     }),
                 "redaction evidenceDigests",

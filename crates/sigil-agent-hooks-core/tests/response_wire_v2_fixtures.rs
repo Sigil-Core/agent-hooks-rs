@@ -204,6 +204,22 @@ fn format2_rejects_hostile_schema_and_contradictory_decisions() {
     arbitrary_redaction.redactions[0].evidence_digests[0] = "d".repeat(64);
     assert!(arbitrary_redaction.canonical_bytes().is_err());
 
+    let mut observed_redaction_evidence =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-redact.json"))
+            .expect("valid decision");
+    observed_redaction_evidence.findings[0].observed = true;
+    observed_redaction_evidence.observe.classes =
+        vec![ResponseClass::PromptInjection, ResponseClass::Secret];
+    observed_redaction_evidence.observe.finding_count = 1;
+    assert!(observed_redaction_evidence.canonical_bytes().is_err());
+
+    let mut unsupported_redaction_class =
+        parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-redact.json"))
+            .expect("valid decision");
+    unsupported_redaction_class.redactions[0].classes =
+        vec![ResponseClass::Pii, ResponseClass::Secret];
+    assert!(unsupported_redaction_class.canonical_bytes().is_err());
+
     let mut partial_redaction =
         parse_response_decision_v2(&canonical_fixture_bytes("format2-decision-redact.json"))
             .expect("valid decision");
