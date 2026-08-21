@@ -115,6 +115,19 @@ fn client(
         .expect("fixture client")
 }
 
+fn client_without_policy_pin(
+    fixture: &DecisionFixture,
+    mode: DecisionVerificationMode,
+) -> SigilClient {
+    SigilClient::builder("sk_fixture")
+        .api_url(&fixture.context.sign_origin)
+        .decision_verification_mode(mode)
+        .decision_record_jwk(fixture.public_jwk.clone())
+        .attestation_issuer(&fixture.context.attestation_issuer)
+        .build()
+        .expect("fixture client without policy pin")
+}
+
 fn context(fixture: &DecisionFixture, vector: &FixtureVector) -> AuthorizationVerificationContext {
     AuthorizationVerificationContext {
         tx_commit: fixture.context.tx_commit.clone(),
@@ -175,6 +188,27 @@ async fn reports_advisory_median_verification_latency() {
         "decision_verification_median_ms={:.3} samples=1000 target_ms=5 advisory=true target_met={}",
         median.as_secs_f64() * 1_000.0,
         median < Duration::from_millis(5)
+    );
+}
+
+#[tokio::test]
+async fn warn_mode_verifies_a_valid_signed_response_without_an_optional_policy_pin() {
+    let fixture = fixture();
+    let vector = fixture
+        .vectors
+        .iter()
+        .find(|vector| vector.id == "valid_allowed")
+        .expect("valid vector");
+    let result = client_without_policy_pin(&fixture, DecisionVerificationMode::Warn)
+        .verify_authorization_response(&body(&fixture, vector), &context(&fixture, vector))
+        .await;
+
+    assert_eq!(result.reason, None);
+    assert!(result.is_verified());
+    assert!(result.permits_execution());
+    assert_eq!(
+        result.verified_policy_hash(),
+        Some(fixture.context.expected_policy_hash.as_str())
     );
 }
 

@@ -101,6 +101,29 @@ impl DecisionVerificationReason {
 
 #[derive(Debug, PartialEq, Eq)]
 /// Verified bindings carried by a non-forgeable authorization capability.
+///
+/// The type cannot be constructed, cloned, or deserialized by consumers.
+///
+/// ```compile_fail
+/// use sigil_agent_hooks_core::VerifiedAuthorization;
+/// let _forged = VerifiedAuthorization {
+///     intent_hash: String::new(),
+///     policy_hash: String::new(),
+///     _private: (),
+/// };
+/// ```
+///
+/// ```compile_fail
+/// use sigil_agent_hooks_core::VerifiedAuthorization;
+/// fn require_clone<T: Clone>() {}
+/// require_clone::<VerifiedAuthorization>();
+/// ```
+///
+/// ```compile_fail
+/// use sigil_agent_hooks_core::VerifiedAuthorization;
+/// fn require_deserialize<T: serde::de::DeserializeOwned>() {}
+/// require_deserialize::<VerifiedAuthorization>();
+/// ```
 pub struct VerifiedAuthorization {
     intent_hash: String,
     policy_hash: String,
@@ -132,6 +155,25 @@ enum AuthorizationKind {
 
 #[derive(Debug, PartialEq, Eq)]
 /// Opaque authority that an execution adapter must possess before continuing.
+///
+/// The type cannot be constructed, cloned, or deserialized by consumers.
+///
+/// ```compile_fail
+/// use sigil_agent_hooks_core::AuthorizationCapability;
+/// let _forged = AuthorizationCapability {};
+/// ```
+///
+/// ```compile_fail
+/// use sigil_agent_hooks_core::AuthorizationCapability;
+/// fn require_clone<T: Clone>() {}
+/// require_clone::<AuthorizationCapability>();
+/// ```
+///
+/// ```compile_fail
+/// use sigil_agent_hooks_core::AuthorizationCapability;
+/// fn require_deserialize<T: serde::de::DeserializeOwned>() {}
+/// require_deserialize::<AuthorizationCapability>();
+/// ```
 pub struct AuthorizationCapability {
     kind: AuthorizationKind,
 }
@@ -854,14 +896,9 @@ impl SigilClient {
             .await?;
             let (intent_hash, policy_hash) =
                 validate_decision_claims(&record, &origin, context, body, body_decision.clone())?;
-            let expected_policy_hash =
-                self.config
-                    .expected_policy_hash
-                    .as_deref()
-                    .ok_or(VerificationFailure(
-                        DecisionVerificationReason::PolicyBinding,
-                    ))?;
-            if policy_hash != expected_policy_hash {
+            if let Some(expected_policy_hash) = self.config.expected_policy_hash.as_deref()
+                && policy_hash != expected_policy_hash
+            {
                 return Err(VerificationFailure(
                     DecisionVerificationReason::PolicyBinding,
                 ));

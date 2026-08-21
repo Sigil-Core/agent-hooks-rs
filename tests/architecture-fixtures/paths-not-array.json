@@ -1,0 +1,10 @@
+{
+  "ruleSets": [
+    {
+      "name": "invalid-paths",
+      "paths": "src",
+      "allowedFiles": [],
+      "forbiddenIdentifiers": ["ed25519_dalek"]
+    }
+  ]
+}

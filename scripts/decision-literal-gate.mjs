@@ -2,9 +2,18 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
 const args = new Set(process.argv.slice(2));
+const failCli = (message) => {
+  console.error(`decision-literal-gate: CLI error: ${message}`);
+  process.exit(2);
+};
 const valueAfter = (flag, fallback) => {
   const index = process.argv.indexOf(flag);
-  return index === -1 ? fallback : process.argv[index + 1];
+  if (index === -1) return fallback;
+  const value = process.argv[index + 1];
+  if (value === undefined || value.startsWith('-')) {
+    failCli(`${flag} requires a value`);
+  }
+  return value;
 };
 const root = resolve(valueAfter('--root', process.cwd()));
 const configPath = resolve(root, valueAfter('--config', 'decision-literal-allowlist.json'));
@@ -24,7 +33,7 @@ const walk = (absolute) => {
 for (const runtimePath of config.runtimePaths) {
   const absolute = resolve(root, runtimePath);
   if (statSync(absolute).isDirectory()) walk(absolute);
-  else files.push(absolute);
+  else if (absolute.endsWith('.rs')) files.push(absolute);
 }
 
 const violations = [];
