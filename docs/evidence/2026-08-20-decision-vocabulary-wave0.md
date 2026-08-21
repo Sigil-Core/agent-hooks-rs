@@ -177,10 +177,10 @@ are recorded in the coordinated execution closeout rather than frozen here.
   stampede controls. Rust retains byte- and behavior-level parity with that
   upstream contract.
 - Rust 1.92.0 and current-stable full workspace tests pass. Raw evidence is
-  `/tmp/agent-hooks-rs-followup-final-msrv.txt` at SHA-256
-  `28ba0c2280e8037125a6858bc9ac94495ac98241f3630952f3b342731309e246`
-  and `/tmp/agent-hooks-rs-followup-final-current.txt` at SHA-256
-  `f4ec1fe5e5b0497d53032715e640a15cc9b8dcede21a61dff096337abafdbd60`.
+  `/tmp/agent-hooks-rs-pr13-pinfix-msrv.txt` at SHA-256
+  `2cf1e626cf70021d6639e7757856aab84b8ace2e9835a575bcddf7f5403a7df9`
+  and `/tmp/agent-hooks-rs-pr13-pinfix-current.txt` at SHA-256
+  `cb0da3bd1e5085ad39c049d0442fd4c8135bc972d42ade0ed024a23f49562d5d`.
   Formatting, no-default checks, MSRV all-target/all-feature Clippy, current
   no-default Clippy, blocking gates, publisher matrix, dependency policy,
   audit, package verification/listing, YAML validation, and diff checks pass.
@@ -190,7 +190,9 @@ are recorded in the coordinated execution closeout rather than frozen here.
 - Builder validation rejects every non-HTTPS or non-root API URL before a
   request and requires every supplied policy pin to be exactly 64 lowercase
   hexadecimal characters. Enforce mode still requires the pin; warn mode
-  without one emits the policy-binding diagnostic on every call.
+  without one emits the policy-binding diagnostic on every call while a valid
+  signed response still yields verified authorization. A signed fixture
+  regression proves the optional warn-mode pin does not downgrade authority.
 - Only failure before any response enters configured transport fail mode.
   Live TLS seams prove HTTP 429 and 5xx, malformed JSON, a 64 KiB overflow, and
   a truncated body after headers deny under `FailMode::Open`, including enforce

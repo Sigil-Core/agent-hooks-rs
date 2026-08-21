@@ -896,14 +896,9 @@ impl SigilClient {
             .await?;
             let (intent_hash, policy_hash) =
                 validate_decision_claims(&record, &origin, context, body, body_decision.clone())?;
-            let expected_policy_hash =
-                self.config
-                    .expected_policy_hash
-                    .as_deref()
-                    .ok_or(VerificationFailure(
-                        DecisionVerificationReason::PolicyBinding,
-                    ))?;
-            if policy_hash != expected_policy_hash {
+            if let Some(expected_policy_hash) = self.config.expected_policy_hash.as_deref()
+                && policy_hash != expected_policy_hash
+            {
                 return Err(VerificationFailure(
                     DecisionVerificationReason::PolicyBinding,
                 ));
