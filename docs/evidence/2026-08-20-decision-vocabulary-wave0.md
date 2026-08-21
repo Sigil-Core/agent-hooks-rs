@@ -1,6 +1,6 @@
 # Decision vocabulary Wave 0 evidence
 
-Date: 2026-08-20
+Date: 2026-08-21
 
 ## Baseline and classification
 
@@ -134,8 +134,9 @@ transport path. Neither path can counterfeit the verified capability.
   (`2026-08-20T23:36:00-04:00`) through `2036-08-18T03:36:00Z`; live TLS
   handshakes use the system clock, so the evidence date is inside that interval.
 - Capability gate: external construction, deserialization, and cloning fail to
-  compile through `trybuild` for both `VerifiedAuthorization` and the actual
-  public execution-bearing `AuthorizationCapability` wrapper.
+  compile through six cross-platform Rustdoc negative examples for both
+  `VerifiedAuthorization` and the public execution-bearing
+  `AuthorizationCapability` wrapper.
 - Literal gate: zero runtime violations; a planted literal fixture proves the
   gate exits non-zero when blocking.
 - Architecture gate: execution adapters contain no forbidden verifier or raw
@@ -147,6 +148,42 @@ transport path. Neither path can counterfeit the verified capability.
 
 Final full-workspace, clippy, dependency-policy, audit, packaging, and YAML checks
 are recorded in the coordinated execution closeout rather than frozen here.
+
+## Hosted-CI correction and review disposition
+
+- The cross-version capability proof now uses six Rustdoc `compile_fail`
+  examples instead of target-specific `trybuild` diagnostic snapshots. Rust
+  1.92.0 and the current stable toolchain both prove that external code cannot
+  construct, clone, or deserialize either execution-bearing capability without
+  depending on compiler wording or platform-specific type paths.
+- The architecture gate rejects missing flag values and malformed rule-set
+  shapes with exit code 2 before scanning. Its negative suite covers a missing
+  `--root` value, a null top-level configuration, absent legacy paths, and
+  non-array rule-set paths.
+- The literal gate also rejects missing flag values with exit code 2 and scans
+  only Rust files, whether a configured runtime path names a directory or an
+  individual file. A non-Rust file containing a planted decision token proves
+  the explicit-file filter.
+- Rust CI invokes both decision gates with `--blocking`. Its change detector
+  includes `rust-toolchain.toml`, `rustfmt.toml`, and `clippy.toml`, so a
+  toolchain-policy change cannot skip the Rust job.
+- `sigil-agent-hooks-core` is exact-pinned to `=0.4.0` in both the IronClaw
+  normal and test dependency tables. Live crates.io metadata still reports
+  IronClaw 0.24.0 as the newest release, so no unavailable upgrade or
+  unsupported Wasmtime override was added. The approved unreachable-advisory
+  disposition remains unchanged.
+- The request for an unknown-key refresh cooldown is incompatible with the
+  finalized amendment, which deletes key-miss cooldown, negative caching, and
+  stampede controls. Rust retains byte- and behavior-level parity with that
+  upstream contract.
+- Rust 1.92.0 and current-stable full workspace tests pass. Raw evidence is
+  `/tmp/agent-hooks-rs-followup-final-msrv.txt` at SHA-256
+  `28ba0c2280e8037125a6858bc9ac94495ac98241f3630952f3b342731309e246`
+  and `/tmp/agent-hooks-rs-followup-final-current.txt` at SHA-256
+  `f4ec1fe5e5b0497d53032715e640a15cc9b8dcede21a61dff096337abafdbd60`.
+  Formatting, no-default checks, MSRV all-target/all-feature Clippy, current
+  no-default Clippy, blocking gates, publisher matrix, dependency policy,
+  audit, package verification/listing, YAML validation, and diff checks pass.
 
 ## Final-audit superseding evidence
 
@@ -162,10 +199,11 @@ are recorded in the coordinated execution closeout rather than frozen here.
   signed `DENIED` decision record under enforce mode, invalid record rejection,
   malformed-body authentication failure, and non-`DENIED` authentication
   failure. HTTP 401 remains an authentication failure.
-- The complete workspace gate passes 90 of 90 Rust test harness cases. The
-  single `trybuild` harness contains six independent external compile failures:
-  construction, deserialization, and cloning for each of
-  `VerifiedAuthorization` and `AuthorizationCapability`.
+- The complete workspace gate includes six independent external compile
+  failures: construction, deserialization, and cloning for each of
+  `VerifiedAuthorization` and `AuthorizationCapability`. Rustdoc checks only
+  the required compilation failure, so compiler wording can differ by target
+  and supported Rust version without weakening the negative proof.
 - Formatting, advisory literal gate, blocking architecture gate, all-target and
   all-feature Clippy with warnings denied, dependency policy, audit, and
   `git diff --check` pass. Cargo audit reports zero vulnerabilities and the same
