@@ -1,0 +1,3 @@
+{
+  "forbiddenIdentifiers": ["ed25519_dalek"]
+}

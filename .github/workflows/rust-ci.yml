@@ -36,7 +36,7 @@ jobs:
 
           git diff --name-only "${BASE_SHA}" HEAD > changed-files.txt
 
-          if grep -Eq '^(Cargo\.(toml|lock)|deny\.toml|\.cargo/audit\.toml|crates/|contract-fixtures/|scripts/(decision-|publish-rust-crates\.sh)|tests/(publish-rust-crates\.sh|gate-fixtures/|architecture-fixtures/)|\.github/workflows/(publish-rust|rust-ci)\.yml|decision-(literal|architecture)-allowlist\.json)' changed-files.txt; then
+          if grep -Eq '^(Cargo\.(toml|lock)|rust-toolchain\.toml|rustfmt\.toml|clippy\.toml|deny\.toml|\.cargo/audit\.toml|crates/|contract-fixtures/|scripts/(decision-|publish-rust-crates\.sh)|tests/(publish-rust-crates\.sh|gate-fixtures/|architecture-fixtures/)|\.github/workflows/(publish-rust|rust-ci)\.yml|decision-(literal|architecture)-allowlist\.json)' changed-files.txt; then
             echo "rust_changed=true" >> "${GITHUB_OUTPUT}"
           else
             echo "rust_changed=false" >> "${GITHUB_OUTPUT}"
@@ -62,9 +62,9 @@ jobs:
       - if: steps.changes.outputs.rust_changed == 'true'
         run: cargo check --workspace --no-default-features
       - if: steps.changes.outputs.rust_changed == 'true'
-        run: node scripts/decision-literal-gate.mjs
+        run: node scripts/decision-literal-gate.mjs --blocking
       - if: steps.changes.outputs.rust_changed == 'true'
-        run: node scripts/decision-architecture-gate.mjs
+        run: node scripts/decision-architecture-gate.mjs --blocking
       - if: steps.changes.outputs.rust_changed == 'true'
         run: bash tests/publish-rust-crates.sh
       - if: steps.changes.outputs.rust_changed == 'true'

@@ -1,15 +1,30 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
+const failConfiguration = (message) => {
+  console.error(`decision-architecture-gate: configuration error: ${message}`);
+  process.exit(2);
+};
 const valueAfter = (flag, fallback) => {
   const index = process.argv.indexOf(flag);
-  return index === -1 ? fallback : process.argv[index + 1];
+  if (index === -1) return fallback;
+  const value = process.argv[index + 1];
+  if (value === undefined || value.startsWith('--')) {
+    failConfiguration(`${flag} requires a value`);
+  }
+  return value;
 };
 const root = resolve(valueAfter('--root', process.cwd()));
-const config = JSON.parse(readFileSync(resolve(
+const configPath = resolve(
   root,
   valueAfter('--config', 'decision-architecture-allowlist.json'),
-), 'utf8'));
+);
+let config;
+try {
+  config = JSON.parse(readFileSync(configPath, 'utf8'));
+} catch (error) {
+  failConfiguration(`cannot read ${configPath}: ${error.message}`);
+}
 const blocking = process.argv.includes('--blocking');
 const walk = (directory) => {
   const files = [];
@@ -23,12 +38,50 @@ const walk = (directory) => {
   visit(directory);
   return files;
 };
-const ruleSets = config.ruleSets ?? [{
-  name: 'legacy-execution-boundary',
-  paths: config.executionPaths,
-  allowedFiles: [],
-  forbiddenIdentifiers: config.forbiddenIdentifiers,
-}];
+const isStringArray = (value) => Array.isArray(value)
+  && value.length > 0
+  && value.every((entry) => typeof entry === 'string' && entry.length > 0);
+let ruleSets;
+if (config.ruleSets === undefined) {
+  if (!isStringArray(config.executionPaths)) {
+    failConfiguration('executionPaths must be a non-empty string array');
+  }
+  if (!isStringArray(config.forbiddenIdentifiers)) {
+    failConfiguration('forbiddenIdentifiers must be a non-empty string array');
+  }
+  ruleSets = [{
+    name: 'legacy-execution-boundary',
+    paths: config.executionPaths,
+    allowedFiles: [],
+    forbiddenIdentifiers: config.forbiddenIdentifiers,
+  }];
+} else {
+  if (!Array.isArray(config.ruleSets) || config.ruleSets.length === 0) {
+    failConfiguration('ruleSets must be a non-empty array');
+  }
+  ruleSets = config.ruleSets;
+}
+for (const [index, ruleSet] of ruleSets.entries()) {
+  if (typeof ruleSet !== 'object' || ruleSet === null || Array.isArray(ruleSet)) {
+    failConfiguration(`ruleSets[${index}] must be an object`);
+  }
+  if (typeof ruleSet.name !== 'string' || ruleSet.name.length === 0) {
+    failConfiguration(`ruleSets[${index}].name must be a non-empty string`);
+  }
+  if (!isStringArray(ruleSet.paths)) {
+    failConfiguration(`ruleSets[${index}].paths must be a non-empty string array`);
+  }
+  if (!isStringArray(ruleSet.forbiddenIdentifiers)) {
+    failConfiguration(
+      `ruleSets[${index}].forbiddenIdentifiers must be a non-empty string array`,
+    );
+  }
+  if (ruleSet.allowedFiles !== undefined
+      && (!Array.isArray(ruleSet.allowedFiles)
+        || !ruleSet.allowedFiles.every((entry) => typeof entry === 'string'))) {
+    failConfiguration(`ruleSets[${index}].allowedFiles must be a string array`);
+  }
+}
 const violations = [];
 for (const ruleSet of ruleSets) {
   const allowedFiles = new Set(ruleSet.allowedFiles ?? []);
