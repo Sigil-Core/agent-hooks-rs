@@ -8,14 +8,18 @@ resolver = "2"
 [workspace.package]
 edition = "2024"
 license = "MIT"
+repository = "https://github.com/Sigil-Core/agent-hooks-rs"
 rust-version = "1.92"
-version = "0.3.0"
+version = "0.4.0"
 
 [workspace.dependencies]
 async-trait = "0.1"
+base64 = "0.22"
+ed25519-dalek = "2"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "time"] }
+uuid = { version = "1", features = ["v4"] }

@@ -1,9 +1,15 @@
 mod client;
+mod decision;
 mod model_usage;
 mod rejection;
 mod response_wire;
 mod types;
 
+pub use decision::{
+    AuthorizationCapability, AuthorizationVerificationContext, AuthorizationVerificationResult,
+    DecisionSurface, DecisionVerificationReason, VerifiedAuthorization,
+    authorization_permits_execution, normalize_decision_literal, verified_authorization,
+};
 pub use model_usage::{
     check_model_budget, clear_model_usage, get_model_usage_report, normalize_model_usage,
     record_model_usage,
@@ -23,9 +29,9 @@ pub use response_wire::{
     parse_response_decision_v1, parse_response_decision_v2,
 };
 pub use types::{
-    FailMode, FrameworkId, HttpMethod, SigilClient, SigilClientBuilder, SigilClientError,
-    SigilConfig, SigilDecision, SigilIntent, SigilModelUsage, SigilModelUsageError,
-    SigilModelUsageReport, SigilRejectionContext, SigilResult,
+    DecisionJwk, DecisionVerificationMode, FailMode, FrameworkId, HttpMethod, SigilClient,
+    SigilClientBuilder, SigilClientError, SigilConfig, SigilDecision, SigilIntent, SigilModelUsage,
+    SigilModelUsageError, SigilModelUsageReport, SigilRejectionContext, SigilResult,
 };
 
 pub const SIGIL_UNREACHABLE: &str = "SIGIL_UNREACHABLE";

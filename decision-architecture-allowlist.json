@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "ruleSets": [
+    {
+      "name": "execution-capability-boundary",
+      "paths": ["crates/sigil-agent-hooks-ironclaw/src"],
+      "allowedFiles": [],
+      "forbiddenIdentifiers": [
+        "SigilDecision",
+        "normalize_decision_literal",
+        "verify_authorization_response",
+        "VerifiedAuthorization"
+      ]
+    },
+    {
+      "name": "decision-verifier-crypto-boundary",
+      "paths": [
+        "crates/sigil-agent-hooks-core/src",
+        "crates/sigil-agent-hooks-ironclaw/src"
+      ],
+      "allowedFiles": ["crates/sigil-agent-hooks-core/src/decision.rs"],
+      "forbiddenIdentifiers": [
+        "ed25519_dalek",
+        "VerifyingKey",
+        "URL_SAFE_NO_PAD",
+        "parse_compact_jws"
+      ]
+    }
+  ]
+}

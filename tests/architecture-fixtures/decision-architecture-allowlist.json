@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "ruleSets": [
+    {
+      "name": "execution-capability-boundary",
+      "paths": ["src"],
+      "allowedFiles": [],
+      "forbiddenIdentifiers": ["normalize_decision_literal"]
+    },
+    {
+      "name": "decision-verifier-crypto-boundary",
+      "paths": ["src"],
+      "allowedFiles": [],
+      "forbiddenIdentifiers": ["ed25519_dalek", "VerifyingKey"]
+    }
+  ]
+}

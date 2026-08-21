@@ -2,6 +2,7 @@
   "framework": "agent-hooks",
   "agentId": "fixture-agent",
   "txCommit": "2222222222222222222222222222222222222222222222222222222222222222",
+  "request_nonce": "00000000-0000-4000-8000-000000000000",
   "intent": {
     "action": "web_fetch",
     "url": "https://example.com/policy",

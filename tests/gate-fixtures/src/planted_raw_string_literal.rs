@@ -1,0 +1,1 @@
+const PLANTED_RAW_STRING_LITERAL: &str = r#"ALLOWED"#;
