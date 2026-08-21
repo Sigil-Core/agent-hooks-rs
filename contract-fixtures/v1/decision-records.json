@@ -1,0 +1,323 @@
+{
+  "version": 1,
+  "minimumVectorCount": 23,
+  "minimumMalformedJoseVectorCount": 6,
+  "publicJwk": {
+    "kty": "OKP",
+    "crv": "Ed25519",
+    "x": "9cmOxyWpijRUJpHhB022ZExZE7QnNmiagGPZ9O0ZB8o",
+    "kid": "decision-fixture-key-1",
+    "use": "sig",
+    "key_ops": [
+      "verify"
+    ]
+  },
+  "rotationPublicJwk": {
+    "kty": "OKP",
+    "crv": "Ed25519",
+    "x": "5qizXCHEytF6Be9zmaQwIeYc7jjcv-I99bUFSv9MyZ4",
+    "kid": "decision-fixture-key-2",
+    "use": "sig",
+    "key_ops": [
+      "verify"
+    ]
+  },
+  "context": {
+    "signOrigin": "https://sign-test.sigilcore.com",
+    "txCommit": "1111111111111111111111111111111111111111111111111111111111111111",
+    "requestNonce": "11111111-1111-4111-8111-111111111111",
+    "expectedPolicyHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "nowUnixSeconds": 2000000000,
+    "surface": "authorize",
+    "attestationIssuer": "sigil-core"
+  },
+  "tokens": {
+    "allowed": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRlY2lzaW9uLWZpeHR1cmUta2V5LTEiLCJ0eXAiOiJzb2YtZGVjaXNpb24randzIn0.eyJpc3MiOiJodHRwczovL3NpZ24tdGVzdC5zaWdpbGNvcmUuY29tIiwiYXVkIjoiaHR0cHM6Ly9zaWduLXRlc3Quc2lnaWxjb3JlLmNvbSIsInN1cmZhY2UiOiJhdXRob3JpemUiLCJkZWNpc2lvbiI6IkFMTE9XRUQiLCJpbnRlbnRIYXNoIjoiMzEzOGJiOWJjNzhkZjI3YzQ3M2VjZmQxNDEwZjdiZDQ1ZWJhYzFmNTljZjNmZjljZmU0ZGI3N2FhYjdhZWRkMyIsInBvbGljeUhhc2giOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwicmVxdWVzdE5vbmNlIjoiMTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTExIiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwNjB9.3FTzkb545S2kXl1SWYjP-61X4VmRVWJRjurdKTz7vhusFwjwlEeNAbVwsV-WsFP8kB3UK_YwGMJYqRRoHDgyCg",
+    "denied": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRlY2lzaW9uLWZpeHR1cmUta2V5LTEiLCJ0eXAiOiJzb2YtZGVjaXNpb24randzIn0.eyJpc3MiOiJodHRwczovL3NpZ24tdGVzdC5zaWdpbGNvcmUuY29tIiwiYXVkIjoiaHR0cHM6Ly9zaWduLXRlc3Quc2lnaWxjb3JlLmNvbSIsInN1cmZhY2UiOiJhdXRob3JpemUiLCJkZWNpc2lvbiI6IkRFTklFRCIsImludGVudEhhc2giOiIzMTM4YmI5YmM3OGRmMjdjNDczZWNmZDE0MTBmN2JkNDVlYmFjMWY1OWNmM2ZmOWNmZTRkYjc3YWFiN2FlZGQzIiwicG9saWN5SGFzaCI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJyZXF1ZXN0Tm9uY2UiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJpYXQiOjIwMDAwMDAwMDAsImV4cCI6MjAwMDAwMDA2MH0.XK40tGkcqEMdqtOMCqMXMzFyQJ6PArs0yHU51SHaqfBJLGqGc91bawBGFsUdiGGrDfiVP4eAHbmK3UhtRt80Cg",
+    "pending": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRlY2lzaW9uLWZpeHR1cmUta2V5LTEiLCJ0eXAiOiJzb2YtZGVjaXNpb24randzIn0.eyJpc3MiOiJodHRwczovL3NpZ24tdGVzdC5zaWdpbGNvcmUuY29tIiwiYXVkIjoiaHR0cHM6Ly9zaWduLXRlc3Quc2lnaWxjb3JlLmNvbSIsInN1cmZhY2UiOiJhdXRob3JpemUiLCJkZWNpc2lvbiI6IlBFTkRJTkciLCJpbnRlbnRIYXNoIjoiMzEzOGJiOWJjNzhkZjI3YzQ3M2VjZmQxNDEwZjdiZDQ1ZWJhYzFmNTljZjNmZjljZmU0ZGI3N2FhYjdhZWRkMyIsInBvbGljeUhhc2giOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwicmVxdWVzdE5vbmNlIjoiMTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTExIiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwNjAsImhvbGRJZCI6ImhvbGQtZml4dHVyZS0xIn0.MiKx37fAsOMtOcO9B0OBvoFWTmQTjolR0eCaPseTuKfkhIy0pxAwASIHYJfLpmBiU-DBMjKeRjy5Gji8P26ZCg",
+    "attestation": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRlY2lzaW9uLWZpeHR1cmUta2V5LTEifQ.eyJpc3MiOiJzaWdpbC1jb3JlIiwiYXVkIjoic2lnaWwtc2lnbiIsImFnZW50SWQiOiJmaXh0dXJlLWFnZW50IiwiZnJhbWV3b3JrIjoiYWdlbnQtaG9va3MiLCJpbnRlbnRIYXNoIjoiMzEzOGJiOWJjNzhkZjI3YzQ3M2VjZmQxNDEwZjdiZDQ1ZWJhYzFmNTljZjNmZjljZmU0ZGI3N2FhYjdhZWRkMyIsInBvbGljeUhhc2giOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwicHJvdmVuYW5jZSI6ImFnZW50IiwiZGVjaXNpb24iOiJBTExPV0VEIiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwNjAsImtpZCI6ImRlY2lzaW9uLWZpeHR1cmUta2V5LTEifQ.8KZeZIJc-e3PXiPVJRHNpZTR7IioahWByKt6QcZZMF-wsZKsZgefz3Ows06s1L6o0RTGGu9ycNPGt15uss5oCg",
+    "tampered": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRlY2lzaW9uLWZpeHR1cmUta2V5LTEiLCJ0eXAiOiJzb2YtZGVjaXNpb24randzIn0.eyJpc3MiOiJodHRwczovL3NpZ24tdGVzdC5zaWdpbGNvcmUuY29tIiwiYXVkIjoiaHR0cHM6Ly9zaWduLXRlc3Quc2lnaWxjb3JlLmNvbSIsInN1cmZhY2UiOiJhdXRob3JpemUiLCJkZWNpc2lvbiI6IkFMTE9XRUQiLCJpbnRlbnRIYXNoIjoiMzEzOGJiOWJjNzhkZjI3YzQ3M2VjZmQxNDEwZjdiZDQ1ZWJhYzFmNTljZjNmZjljZmU0ZGI3N2FhYjdhZWRkMyIsInBvbGljeUhhc2giOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwicmVxdWVzdE5vbmNlIjoiMTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTExIiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwNjB9.3FTzkb545S2kXl1SWYjP-61X4VmRVWJRjurdKTz7vhusFwjwlEeNAbVwsV-WsFP8kB3UK_YwGMJYqRRoHDgyCA",
+    "expired": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRlY2lzaW9uLWZpeHR1cmUta2V5LTEiLCJ0eXAiOiJzb2YtZGVjaXNpb24randzIn0.eyJpc3MiOiJodHRwczovL3NpZ24tdGVzdC5zaWdpbGNvcmUuY29tIiwiYXVkIjoiaHR0cHM6Ly9zaWduLXRlc3Quc2lnaWxjb3JlLmNvbSIsInN1cmZhY2UiOiJhdXRob3JpemUiLCJkZWNpc2lvbiI6IkFMTE9XRUQiLCJpbnRlbnRIYXNoIjoiMzEzOGJiOWJjNzhkZjI3YzQ3M2VjZmQxNDEwZjdiZDQ1ZWJhYzFmNTljZjNmZjljZmU0ZGI3N2FhYjdhZWRkMyIsInBvbGljeUhhc2giOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwicmVxdWVzdE5vbmNlIjoiMTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTExIiwiaWF0IjoxOTk5OTk5ODgwLCJleHAiOjE5OTk5OTk5NDB9.lCMzd1K-P6nue2TYCJpjh_25RFlP8J_k1JyiUy9FRX7OnX2joZQ590nZBQI5d2Y-MQmJaPGvIgnFf2tZTfD2Bw",
+    "wrong_audience": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRlY2lzaW9uLWZpeHR1cmUta2V5LTEiLCJ0eXAiOiJzb2YtZGVjaXNpb24randzIn0.eyJpc3MiOiJodHRwczovL3NpZ24tdGVzdC5zaWdpbGNvcmUuY29tIiwiYXVkIjoiaHR0cHM6Ly9zaWduLnNpZ2lsY29yZS5jb20iLCJzdXJmYWNlIjoiYXV0aG9yaXplIiwiZGVjaXNpb24iOiJBTExPV0VEIiwiaW50ZW50SGFzaCI6IjMxMzhiYjliYzc4ZGYyN2M0NzNlY2ZkMTQxMGY3YmQ0NWViYWMxZjU5Y2YzZmY5Y2ZlNGRiNzdhYWI3YWVkZDMiLCJwb2xpY3lIYXNoIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSIsInJlcXVlc3ROb25jZSI6IjExMTExMTExLTExMTEtNDExMS04MTExLTExMTExMTExMTExMSIsImlhdCI6MjAwMDAwMDAwMCwiZXhwIjoyMDAwMDAwMDYwfQ.u6RuaybE9AA1L7Eu0qqVOU-_NdjsTfgDI4nnoZTd8uuRNnzDr09mhqFZ77WHK19sWulJGbLHu4hC58tPUlHaCA",
+    "wrong_surface": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRlY2lzaW9uLWZpeHR1cmUta2V5LTEiLCJ0eXAiOiJzb2YtZGVjaXNpb24randzIn0.eyJpc3MiOiJodHRwczovL3NpZ24tdGVzdC5zaWdpbGNvcmUuY29tIiwiYXVkIjoiaHR0cHM6Ly9zaWduLXRlc3Quc2lnaWxjb3JlLmNvbSIsInN1cmZhY2UiOiJob2xkX3Jlc29sdmUiLCJkZWNpc2lvbiI6IkFMTE9XRUQiLCJpbnRlbnRIYXNoIjoiMzEzOGJiOWJjNzhkZjI3YzQ3M2VjZmQxNDEwZjdiZDQ1ZWJhYzFmNTljZjNmZjljZmU0ZGI3N2FhYjdhZWRkMyIsInBvbGljeUhhc2giOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwicmVxdWVzdE5vbmNlIjoiMTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTExIiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwNjAsImhvbGRJZCI6ImhvbGQtZml4dHVyZS0xIn0.8ScIU_ucXTQMUE2LbtOXCh55TcftpMx2DJ_bjRWEHzFIHP9guCXfwuVE9tW-u1O58pv9Y4uKnk6VT6Y4cHXRDA",
+    "wrong_intent": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRlY2lzaW9uLWZpeHR1cmUta2V5LTEiLCJ0eXAiOiJzb2YtZGVjaXNpb24randzIn0.eyJpc3MiOiJodHRwczovL3NpZ24tdGVzdC5zaWdpbGNvcmUuY29tIiwiYXVkIjoiaHR0cHM6Ly9zaWduLXRlc3Quc2lnaWxjb3JlLmNvbSIsInN1cmZhY2UiOiJhdXRob3JpemUiLCJkZWNpc2lvbiI6IkFMTE9XRUQiLCJpbnRlbnRIYXNoIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInBvbGljeUhhc2giOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwicmVxdWVzdE5vbmNlIjoiMTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTExIiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwNjB9.NYz_OVcxZKJLFc0qPx9wd43mgJAnX01JKrV39TJnNAayStJyyGqqzZ8Z1Goy_FwvHQ44gVp2ZIRAXzv3OFFrBg",
+    "wrong_policy": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRlY2lzaW9uLWZpeHR1cmUta2V5LTEiLCJ0eXAiOiJzb2YtZGVjaXNpb24randzIn0.eyJpc3MiOiJodHRwczovL3NpZ24tdGVzdC5zaWdpbGNvcmUuY29tIiwiYXVkIjoiaHR0cHM6Ly9zaWduLXRlc3Quc2lnaWxjb3JlLmNvbSIsInN1cmZhY2UiOiJhdXRob3JpemUiLCJkZWNpc2lvbiI6IkFMTE9XRUQiLCJpbnRlbnRIYXNoIjoiMzEzOGJiOWJjNzhkZjI3YzQ3M2VjZmQxNDEwZjdiZDQ1ZWJhYzFmNTljZjNmZjljZmU0ZGI3N2FhYjdhZWRkMyIsInBvbGljeUhhc2giOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwicmVxdWVzdE5vbmNlIjoiMTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTExIiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwNjB9.jP1ZVFBexNau_UUtHmEiSmt3xMt62GHMKaRmpHvoou1ONIcUwZj2CG7TVGzTJZMpIGfU_OEv_BNHrf68hjMUCA",
+    "wrong_nonce": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRlY2lzaW9uLWZpeHR1cmUta2V5LTEiLCJ0eXAiOiJzb2YtZGVjaXNpb24randzIn0.eyJpc3MiOiJodHRwczovL3NpZ24tdGVzdC5zaWdpbGNvcmUuY29tIiwiYXVkIjoiaHR0cHM6Ly9zaWduLXRlc3Quc2lnaWxjb3JlLmNvbSIsInN1cmZhY2UiOiJhdXRob3JpemUiLCJkZWNpc2lvbiI6IkFMTE9XRUQiLCJpbnRlbnRIYXNoIjoiMzEzOGJiOWJjNzhkZjI3YzQ3M2VjZmQxNDEwZjdiZDQ1ZWJhYzFmNTljZjNmZjljZmU0ZGI3N2FhYjdhZWRkMyIsInBvbGljeUhhc2giOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwicmVxdWVzdE5vbmNlIjoiMjIyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyIiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwNjB9.dqdPKEcdCXuNYiL8WYM-06ZRNpfNoEC2efMvrQW347bDn57cuFeAxMkf8L3Qg1Rb9UfM3bqJT7Ax6r8MZWUfBg",
+    "mixed_attestation": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRlY2lzaW9uLWZpeHR1cmUta2V5LTEifQ.eyJpc3MiOiJzaWdpbC1jb3JlIiwiYXVkIjoic2lnaWwtc2lnbiIsImFnZW50SWQiOiJmaXh0dXJlLWFnZW50IiwiZnJhbWV3b3JrIjoiYWdlbnQtaG9va3MiLCJpbnRlbnRIYXNoIjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiIsInBvbGljeUhhc2giOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwicHJvdmVuYW5jZSI6ImFnZW50IiwiZGVjaXNpb24iOiJBTExPV0VEIiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwNjAsImtpZCI6ImRlY2lzaW9uLWZpeHR1cmUta2V5LTEifQ.VK4OQRKlSel0hdPm4ZIs-T5HFY3sqC3swNiOsTUNf9D9gWnU2rVp_LwAhloZ2Q0lx7EpmPJbh1Cc21eDz1V9DQ",
+    "test_run": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRlY2lzaW9uLWZpeHR1cmUta2V5LTEiLCJ0eXAiOiJzb2YtZGVjaXNpb24randzIn0.eyJpc3MiOiJodHRwczovL3NpZ24tdGVzdC5zaWdpbGNvcmUuY29tIiwiYXVkIjoiaHR0cHM6Ly9zaWduLXRlc3Quc2lnaWxjb3JlLmNvbSIsImRlY2lzaW9uIjoiQUxMT1dFRCIsImludGVudEhhc2giOiIzMTM4YmI5YmM3OGRmMjdjNDczZWNmZDE0MTBmN2JkNDVlYmFjMWY1OWNmM2ZmOWNmZTRkYjc3YWFiN2FlZGQzIiwicG9saWN5SGFzaCI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJyZXF1ZXN0Tm9uY2UiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJpYXQiOjIwMDAwMDAwMDAsImV4cCI6MjAwMDAwMDA2MCwic3VyZmFjZSI6InRlc3RfcnVuIiwidGVzdF9ydW4iOnRydWV9.P1xGaorbACoDFGYX2uhnmd1rOgfsoGYg-Bnm9LkNPt6QOBKKQLBjuogXgfvrr0Bn0aD6hls2Ofy6jY5NP0AKBQ",
+    "hold_resolve": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRlY2lzaW9uLWZpeHR1cmUta2V5LTEiLCJ0eXAiOiJzb2YtZGVjaXNpb24randzIn0.eyJpc3MiOiJodHRwczovL3NpZ24tdGVzdC5zaWdpbGNvcmUuY29tIiwiYXVkIjoiaHR0cHM6Ly9zaWduLXRlc3Quc2lnaWxjb3JlLmNvbSIsImRlY2lzaW9uIjoiQUxMT1dFRCIsImludGVudEhhc2giOiIzMTM4YmI5YmM3OGRmMjdjNDczZWNmZDE0MTBmN2JkNDVlYmFjMWY1OWNmM2ZmOWNmZTRkYjc3YWFiN2FlZGQzIiwicG9saWN5SGFzaCI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJyZXF1ZXN0Tm9uY2UiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJpYXQiOjIwMDAwMDAwMDAsImV4cCI6MjAwMDAwMDA2MCwic3VyZmFjZSI6ImhvbGRfcmVzb2x2ZSIsImhvbGRJZCI6ImhvbGQtZml4dHVyZS0xIiwicmVzb2x2ZWRBdCI6MjAwMDAwMDAwMX0.W6I52-1w8ywyLuwpnFGboGFOQOShaL0Hs9IGIo3xDBCqtLUVleHMoE5650Jppb-lfqG41Sslp6cwPqNm3I2TAw",
+    "rotation_allowed": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRlY2lzaW9uLWZpeHR1cmUta2V5LTIiLCJ0eXAiOiJzb2YtZGVjaXNpb24randzIn0.eyJpc3MiOiJodHRwczovL3NpZ24tdGVzdC5zaWdpbGNvcmUuY29tIiwiYXVkIjoiaHR0cHM6Ly9zaWduLXRlc3Quc2lnaWxjb3JlLmNvbSIsInN1cmZhY2UiOiJhdXRob3JpemUiLCJkZWNpc2lvbiI6IkFMTE9XRUQiLCJpbnRlbnRIYXNoIjoiMzEzOGJiOWJjNzhkZjI3YzQ3M2VjZmQxNDEwZjdiZDQ1ZWJhYzFmNTljZjNmZjljZmU0ZGI3N2FhYjdhZWRkMyIsInBvbGljeUhhc2giOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwicmVxdWVzdE5vbmNlIjoiMTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTExIiwiaWF0IjoyMDAwMDAwMDAwLCJleHAiOjIwMDAwMDAwNjB9.lwhXmb_6Po5RB6WyIA5kiO_-o-jTQRt6Kb7g6MkPHGRnHFbIPR8KVFmEv3MgX5Au92amamj_v-5wuX7WGuffBw"
+  },
+  "malformedJoseVectors": [
+    { "id": "four_segments", "source": "allowed", "mutation": "append_segment" },
+    { "id": "base64url_padding", "source": "allowed", "mutation": "pad_header" },
+    { "id": "non_base64url", "source": "allowed", "mutation": "invalid_header_character" },
+    { "id": "oversized_compact", "source": "allowed", "mutation": "oversize" },
+    { "id": "extra_header_parameter", "source": "allowed", "mutation": "extra_header" },
+    { "id": "duplicate_header_key", "source": "allowed", "mutation": "duplicate_header" }
+  ],
+  "vectors": [
+    {
+      "id": "valid_allowed",
+      "status": "ALLOWED",
+      "decisionRecord": "allowed",
+      "attestation": "attestation",
+      "expected": {
+        "decision": "ALLOWED",
+        "capability": "verified"
+      }
+    },
+    {
+      "id": "alias_approved_input",
+      "status": "APPROVED",
+      "decisionRecord": "allowed",
+      "attestation": "attestation",
+      "expected": {
+        "decision": "ALLOWED",
+        "capability": "verified"
+      }
+    },
+    {
+      "id": "valid_denied",
+      "status": "DENIED",
+      "decisionRecord": "denied",
+      "attestation": null,
+      "expected": {
+        "decision": "DENIED"
+      }
+    },
+    {
+      "id": "valid_pending",
+      "status": "PENDING",
+      "decisionRecord": "pending",
+      "attestation": null,
+      "expected": {
+        "decision": "PENDING"
+      }
+    },
+    {
+      "id": "valid_test_run",
+      "status": "ALLOWED",
+      "decisionRecord": "test_run",
+      "attestation": null,
+      "surface": "test_run",
+      "execution": false,
+      "expected": {
+        "decision": "ALLOWED"
+      }
+    },
+    {
+      "id": "valid_hold_resolve",
+      "status": "ALLOWED",
+      "decisionRecord": "hold_resolve",
+      "attestation": null,
+      "surface": "hold_resolve",
+      "execution": false,
+      "expected": {
+        "decision": "ALLOWED"
+      }
+    },
+    {
+      "id": "valid_rotation_overlap",
+      "status": "ALLOWED",
+      "decisionRecord": "rotation_allowed",
+      "attestation": null,
+      "execution": false,
+      "keySet": "rotation_overlap",
+      "expected": {
+        "decision": "ALLOWED"
+      }
+    },
+    {
+      "id": "unknown_rotation_kid",
+      "status": "ALLOWED",
+      "decisionRecord": "rotation_allowed",
+      "attestation": null,
+      "execution": false,
+      "expected": {
+        "warnDecision": "ALLOWED",
+        "warnCapability": "legacy-unverified",
+        "enforceDecision": "DENIED",
+        "reason": "key_unavailable"
+      }
+    },
+    {
+      "id": "literal_mismatch",
+      "status": "ALLOWED",
+      "decisionRecord": "denied",
+      "attestation": "attestation",
+      "expected": {
+        "warnDecision": "ALLOWED",
+        "warnCapability": "legacy-unverified",
+        "enforceDecision": "DENIED",
+        "reason": "literal_mismatch"
+      }
+    },
+    {
+      "id": "alias_literal_mismatch",
+      "status": "APPROVED",
+      "decisionRecord": "denied",
+      "attestation": "attestation",
+      "expected": {
+        "warnDecision": "ALLOWED",
+        "warnCapability": "legacy-unverified",
+        "enforceDecision": "DENIED",
+        "reason": "literal_mismatch"
+      }
+    },
+    {
+      "id": "tampered_signature",
+      "status": "ALLOWED",
+      "decisionRecord": "tampered",
+      "attestation": "attestation",
+      "expected": {
+        "warnDecision": "ALLOWED",
+        "warnCapability": "legacy-unverified",
+        "enforceDecision": "DENIED",
+        "reason": "signature"
+      }
+    },
+    {
+      "id": "expired",
+      "status": "ALLOWED",
+      "decisionRecord": "expired",
+      "attestation": "attestation",
+      "expected": {
+        "warnDecision": "ALLOWED",
+        "warnCapability": "legacy-unverified",
+        "enforceDecision": "DENIED",
+        "reason": "expired"
+      }
+    },
+    {
+      "id": "wrong_audience",
+      "status": "ALLOWED",
+      "decisionRecord": "wrong_audience",
+      "attestation": "attestation",
+      "expected": {
+        "warnDecision": "ALLOWED",
+        "warnCapability": "legacy-unverified",
+        "enforceDecision": "DENIED",
+        "reason": "audience"
+      }
+    },
+    {
+      "id": "wrong_surface",
+      "status": "ALLOWED",
+      "decisionRecord": "wrong_surface",
+      "attestation": "attestation",
+      "expected": {
+        "warnDecision": "ALLOWED",
+        "warnCapability": "legacy-unverified",
+        "enforceDecision": "DENIED",
+        "reason": "surface"
+      }
+    },
+    {
+      "id": "wrong_intent",
+      "status": "ALLOWED",
+      "decisionRecord": "wrong_intent",
+      "attestation": "attestation",
+      "expected": {
+        "warnDecision": "ALLOWED",
+        "warnCapability": "legacy-unverified",
+        "enforceDecision": "DENIED",
+        "reason": "intent_binding"
+      }
+    },
+    {
+      "id": "wrong_policy",
+      "status": "ALLOWED",
+      "decisionRecord": "wrong_policy",
+      "attestation": "attestation",
+      "expected": {
+        "warnDecision": "ALLOWED",
+        "warnCapability": "legacy-unverified",
+        "enforceDecision": "DENIED",
+        "reason": "policy_binding"
+      }
+    },
+    {
+      "id": "wrong_nonce",
+      "status": "ALLOWED",
+      "decisionRecord": "wrong_nonce",
+      "attestation": "attestation",
+      "expected": {
+        "warnDecision": "ALLOWED",
+        "warnCapability": "legacy-unverified",
+        "enforceDecision": "DENIED",
+        "reason": "nonce"
+      }
+    },
+    {
+      "id": "missing_attestation",
+      "status": "ALLOWED",
+      "decisionRecord": "allowed",
+      "attestation": null,
+      "expected": {
+        "warnDecision": "ALLOWED",
+        "warnCapability": "legacy-unverified",
+        "enforceDecision": "DENIED",
+        "reason": "attestation_missing"
+      }
+    },
+    {
+      "id": "mixed_attestation",
+      "status": "ALLOWED",
+      "decisionRecord": "allowed",
+      "attestation": "mixed_attestation",
+      "expected": {
+        "warnDecision": "ALLOWED",
+        "warnCapability": "legacy-unverified",
+        "enforceDecision": "DENIED",
+        "reason": "attestation_mismatch"
+      }
+    },
+    {
+      "id": "decision_token_in_attestation_slot",
+      "status": "ALLOWED",
+      "decisionRecord": "allowed",
+      "attestation": "allowed",
+      "expected": {
+        "warnDecision": "ALLOWED",
+        "warnCapability": "legacy-unverified",
+        "enforceDecision": "DENIED",
+        "reason": "malformed"
+      }
+    },
+    {
+      "id": "attestation_token_in_decision_slot",
+      "status": "ALLOWED",
+      "decisionRecord": "attestation",
+      "attestation": "attestation",
+      "expected": {
+        "warnDecision": "ALLOWED",
+        "warnCapability": "legacy-unverified",
+        "enforceDecision": "DENIED",
+        "reason": "malformed"
+      }
+    },
+    {
+      "id": "legacy_missing_record",
+      "status": "APPROVED",
+      "decisionRecord": null,
+      "attestation": null,
+      "expected": {
+        "warnDecision": "ALLOWED",
+        "warnCapability": "legacy-unverified",
+        "enforceDecision": "DENIED",
+        "reason": "record_missing"
+      }
+    },
+    {
+      "id": "unknown_literal",
+      "status": "ALLOW",
+      "decisionRecord": null,
+      "attestation": null,
+      "expected": {
+        "decision": "DENIED",
+        "reason": "malformed"
+      }
+    }
+  ]
+}

@@ -7,6 +7,25 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::{net::TcpListener, sync::oneshot};
+use uuid::Uuid;
+
+mod support;
+use support::{TEST_CERT_PEM, TestTlsListener};
+
+struct AxumTlsListener(TestTlsListener);
+
+impl axum::serve::Listener for AxumTlsListener {
+    type Io = tokio_rustls::server::TlsStream<tokio::net::TcpStream>;
+    type Addr = std::net::SocketAddr;
+
+    async fn accept(&mut self) -> (Self::Io, Self::Addr) {
+        self.0.accept().await.expect("TLS test accept")
+    }
+
+    fn local_addr(&self) -> std::io::Result<Self::Addr> {
+        self.0.local_addr()
+    }
+}
 
 fn fixture_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../contract-fixtures/v1")
@@ -53,6 +72,7 @@ async fn spawn() -> TestServer {
         .await
         .expect("listener should bind");
     let addr = listener.local_addr().expect("local addr");
+    let listener = AxumTlsListener(TestTlsListener::new(listener));
     let (tx, rx) = oneshot::channel();
     tokio::spawn(async move {
         let _ = axum::serve(listener, app)
@@ -63,20 +83,27 @@ async fn spawn() -> TestServer {
     });
 
     TestServer {
-        base_url: format!("http://{addr}"),
+        base_url: format!("https://localhost:{}", addr.port()),
         captures,
         shutdown: Some(tx),
     }
 }
 
 fn captured_body(server: &TestServer) -> String {
-    server
+    let body = server
         .captures
         .lock()
         .expect("capture lock")
         .first()
         .expect("captured body")
-        .clone()
+        .clone();
+    let parsed_body: serde_json::Value = serde_json::from_str(&body).expect("captured JSON");
+    let nonce = parsed_body["request_nonce"]
+        .as_str()
+        .expect("request nonce string");
+    let parsed = Uuid::parse_str(nonce).expect("request nonce UUID");
+    assert_eq!(parsed.get_version_num(), 4);
+    body.replacen(nonce, "00000000-0000-4000-8000-000000000000", 1)
 }
 
 #[test]
@@ -90,11 +117,25 @@ fn fixture_hashes_match_sha256sums_file() {
     }
 }
 
+#[test]
+fn fixture_tree_pins_the_exact_typescript_commit() {
+    let pin_path = fixture_root().join("../UPSTREAM_AGENT_HOOKS_TS_COMMIT");
+    let pin = fs::read_to_string(pin_path).expect("upstream TypeScript commit pin");
+    let pin = pin.trim();
+    assert_eq!(pin.len(), 40);
+    assert!(
+        pin.bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    );
+    assert_eq!(pin, "fdcd04f75be762827d84359c31cda1dbede9ded1");
+}
+
 #[tokio::test]
 async fn bash_fixture_matches_http_wire_body() {
     let server = spawn().await;
     let client = SigilClient::builder("sk_fixture")
         .api_url(server.base_url.clone())
+        .additional_root_certificate_pem(TEST_CERT_PEM)
         .agent_id("fixture-agent")
         .task_id("fixture-task-1")
         .framework(FrameworkId::AgentHooks)
@@ -122,6 +163,7 @@ async fn web_fetch_fixture_matches_http_wire_body() {
     let server = spawn().await;
     let client = SigilClient::builder("sk_fixture")
         .api_url(server.base_url.clone())
+        .additional_root_certificate_pem(TEST_CERT_PEM)
         .agent_id("fixture-agent")
         .task_id("fixture-task-1")
         .framework(FrameworkId::AgentHooks)
@@ -149,6 +191,7 @@ async fn wallet_transfer_fixture_matches_http_wire_body() {
     let server = spawn().await;
     let client = SigilClient::builder("sk_fixture")
         .api_url(server.base_url.clone())
+        .additional_root_certificate_pem(TEST_CERT_PEM)
         .agent_id("fixture-agent")
         .task_id("fixture-task-1")
         .framework(FrameworkId::AgentHooks)
@@ -178,6 +221,7 @@ async fn intent_agent_override_fixture_matches_http_wire_body() {
     let server = spawn().await;
     let client = SigilClient::builder("sk_fixture")
         .api_url(server.base_url.clone())
+        .additional_root_certificate_pem(TEST_CERT_PEM)
         .agent_id("config-agent")
         .task_id("fixture-task-1")
         .framework(FrameworkId::AgentHooks)

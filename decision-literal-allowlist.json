@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "runtimePaths": [
+    "crates/sigil-agent-hooks-core/src",
+    "crates/sigil-agent-hooks-ironclaw/src"
+  ],
+  "allowedFiles": [
+    {
+      "path": "crates/sigil-agent-hooks-core/src/decision.rs",
+      "reason": "Canonical vocabulary, permanent input alias, strict verifier, and opaque capability implementation."
+    },
+    {
+      "path": "crates/sigil-agent-hooks-core/src/types.rs",
+      "reason": "Canonical serde output and deserialize-only legacy alias."
+    }
+  ]
+}

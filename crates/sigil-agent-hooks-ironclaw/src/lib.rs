@@ -4,7 +4,8 @@ use ironclaw::hooks::{
 };
 use serde_json::Value;
 use sigil_agent_hooks_core::{
-    FrameworkId, SigilClient, SigilClientError, SigilDecision, SigilIntent, build_rejection_context,
+    FrameworkId, SigilClient, SigilClientError, SigilIntent, authorization_permits_execution,
+    build_rejection_context,
 };
 use std::{sync::Arc, time::Duration};
 
@@ -116,7 +117,9 @@ impl IronclawSigilHookBuilder {
                 .api_url(self.client.config().api_url.clone())
                 .framework(FrameworkId::Ironclaw)
                 .fail_mode(self.client.config().fail_mode)
-                .request_timeout(self.client.config().request_timeout);
+                .request_timeout(self.client.config().request_timeout)
+                .decision_verification_mode(self.client.config().decision_verification_mode)
+                .attestation_issuer(self.client.config().attestation_issuer.clone());
 
             let rebuilt = match &self.client.config().agent_id {
                 Some(agent_id) => rebuilt.agent_id(agent_id.clone()),
@@ -124,6 +127,18 @@ impl IronclawSigilHookBuilder {
             };
             let rebuilt = match &self.client.config().task_id {
                 Some(task_id) => rebuilt.task_id(task_id.clone()),
+                None => rebuilt,
+            };
+            let rebuilt = match &self.client.config().expected_policy_hash {
+                Some(policy_hash) => rebuilt.expected_policy_hash(policy_hash.clone()),
+                None => rebuilt,
+            };
+            let rebuilt = match &self.client.config().decision_record_jwk {
+                Some(jwk) => rebuilt.decision_record_jwk(jwk.clone()),
+                None => rebuilt,
+            };
+            let rebuilt = match &self.client.config().additional_root_certificate_pem {
+                Some(pem) => rebuilt.additional_root_certificate_pem(pem.clone()),
                 None => rebuilt,
             };
 
@@ -184,17 +199,15 @@ impl Hook for IronclawSigilHook {
                     reason: err.to_string(),
                 })?;
 
-        match result.decision {
-            SigilDecision::Approved => Ok(HookOutcome::ok()),
-            SigilDecision::Denied | SigilDecision::Pending => {
-                let rejection = build_rejection_context(&result, &action, Some(&task_id));
-                let reason = serde_json::to_string(&rejection).map_err(|err| {
-                    HookError::ExecutionFailed {
-                        reason: err.to_string(),
-                    }
+        if authorization_permits_execution(&result) {
+            Ok(HookOutcome::ok())
+        } else {
+            let rejection = build_rejection_context(&result, &action, Some(&task_id));
+            let reason =
+                serde_json::to_string(&rejection).map_err(|err| HookError::ExecutionFailed {
+                    reason: err.to_string(),
                 })?;
-                Ok(HookOutcome::reject(reason))
-            }
+            Ok(HookOutcome::reject(reason))
         }
     }
 }
@@ -208,8 +221,50 @@ mod tests {
         http::StatusCode,
         routing::post,
     };
+    use sigil_agent_hooks_core::{
+        DecisionJwk, DecisionVerificationMode, SigilClient as CoreSigilClient, SigilClientBuilder,
+    };
     use std::sync::{Mutex, MutexGuard};
     use tokio::{net::TcpListener, sync::oneshot};
+
+    mod support {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../sigil-agent-hooks-core/tests/support/mod.rs"
+        ));
+    }
+    use support::{TEST_CERT_PEM, TestTlsListener};
+
+    struct AxumTlsListener(TestTlsListener);
+
+    impl axum::serve::Listener for AxumTlsListener {
+        type Io = tokio_rustls::server::TlsStream<tokio::net::TcpStream>;
+        type Addr = std::net::SocketAddr;
+
+        async fn accept(&mut self) -> (Self::Io, Self::Addr) {
+            self.0.accept().await.expect("TLS test accept")
+        }
+
+        fn local_addr(&self) -> std::io::Result<Self::Addr> {
+            self.0.local_addr()
+        }
+    }
+
+    struct SigilClient;
+
+    impl SigilClient {
+        fn builder(api_key: impl Into<String>) -> SigilClientBuilder {
+            CoreSigilClient::builder(api_key).additional_root_certificate_pem(TEST_CERT_PEM)
+        }
+    }
+
+    fn legacy_allowed_status() -> String {
+        ["APPRO", "VED"].concat()
+    }
+
+    fn canonical_allowed_status() -> String {
+        ["ALLO", "WED"].concat()
+    }
 
     #[derive(Clone)]
     struct MockState {
@@ -254,6 +309,7 @@ mod tests {
             .await
             .expect("listener bind");
         let addr = listener.local_addr().expect("local addr");
+        let listener = AxumTlsListener(TestTlsListener::new(listener));
         let (tx, rx) = oneshot::channel();
         tokio::spawn(async move {
             let _ = axum::serve(listener, app)
@@ -263,7 +319,7 @@ mod tests {
                 .await;
         });
         TestServer {
-            base_url: format!("http://{addr}"),
+            base_url: format!("https://localhost:{}", addr.port()),
             captures,
             shutdown: Some(tx),
         }
@@ -305,9 +361,47 @@ mod tests {
         assert!(matches!(outcome, HookOutcome::Continue { modified: None }));
     }
 
+    #[test]
+    fn framework_rebuild_preserves_decision_verification_configuration() {
+        let jwk = DecisionJwk {
+            kty: "OKP".to_string(),
+            crv: "Ed25519".to_string(),
+            kid: "fixture-key".to_string(),
+            x: "9cmOxyWpijRUJpHhB022ZExZE7QnNmiagGPZ9O0ZB8o".to_string(),
+            r#use: Some("sig".to_string()),
+            key_ops: Some(vec!["verify".to_string()]),
+            alg: None,
+        };
+        let client = SigilClient::builder("sk_fixture")
+            .decision_verification_mode(DecisionVerificationMode::Enforce)
+            .expected_policy_hash("a".repeat(64))
+            .decision_record_jwk(jwk.clone())
+            .attestation_issuer("fixture-issuer")
+            .build()
+            .expect("client build");
+        let hook = IronclawSigilHook::builder(client)
+            .build()
+            .expect("hook build");
+
+        assert_eq!(
+            hook.client.config().decision_verification_mode,
+            DecisionVerificationMode::Enforce
+        );
+        assert_eq!(
+            hook.client.config().expected_policy_hash.as_deref(),
+            Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        );
+        assert_eq!(hook.client.config().decision_record_jwk, Some(jwk));
+        assert_eq!(hook.client.config().attestation_issuer, "fixture-issuer");
+    }
+
     #[tokio::test]
     async fn approved_tool_calls_continue() {
-        let server = spawn(serde_json::json!({ "status": "APPROVED" }), StatusCode::OK).await;
+        let server = spawn(
+            serde_json::json!({ "status": legacy_allowed_status() }),
+            StatusCode::OK,
+        )
+        .await;
         let client = SigilClient::builder("sk_fixture")
             .api_url(server.base_url.clone())
             .build()
@@ -325,6 +419,34 @@ mod tests {
             .expect("execute ok");
 
         assert!(matches!(outcome, HookOutcome::Continue { modified: None }));
+    }
+
+    #[tokio::test]
+    async fn unsigned_canonical_allowed_is_blocked_at_the_ironclaw_seam_in_enforce_mode() {
+        let server = spawn(
+            serde_json::json!({ "status": canonical_allowed_status() }),
+            StatusCode::OK,
+        )
+        .await;
+        let client = SigilClient::builder("sk_fixture")
+            .api_url(server.base_url.clone())
+            .decision_verification_mode(DecisionVerificationMode::Enforce)
+            .expected_policy_hash("a".repeat(64))
+            .build()
+            .expect("client build");
+        let hook = IronclawSigilHook::builder(client)
+            .build()
+            .expect("hook build");
+
+        let outcome = hook
+            .execute(
+                &tool_event("exec", serde_json::json!({ "command": "echo hi" })),
+                &HookContext::default(),
+            )
+            .await
+            .expect("execute ok");
+
+        assert!(matches!(outcome, HookOutcome::Reject { .. }));
     }
 
     #[tokio::test]
@@ -413,7 +535,7 @@ mod tests {
     #[tokio::test]
     async fn unreachable_in_closed_mode_rejects_with_sigil_unreachable() {
         let client = SigilClient::builder("sk_fixture")
-            .api_url("http://127.0.0.1:9")
+            .api_url("https://127.0.0.1:9")
             .build()
             .expect("client build");
         let hook = IronclawSigilHook::builder(client)
@@ -457,7 +579,11 @@ mod tests {
 
     #[tokio::test]
     async fn custom_mapper_overrides_default_action_mapping() {
-        let server = spawn(serde_json::json!({ "status": "APPROVED" }), StatusCode::OK).await;
+        let server = spawn(
+            serde_json::json!({ "status": legacy_allowed_status() }),
+            StatusCode::OK,
+        )
+        .await;
         let client = SigilClient::builder("sk_fixture")
             .api_url(server.base_url.clone())
             .build()
@@ -482,7 +608,11 @@ mod tests {
 
     #[tokio::test]
     async fn unknown_tools_lowercase_passthrough() {
-        let server = spawn(serde_json::json!({ "status": "APPROVED" }), StatusCode::OK).await;
+        let server = spawn(
+            serde_json::json!({ "status": legacy_allowed_status() }),
+            StatusCode::OK,
+        )
+        .await;
         let client = SigilClient::builder("sk_fixture")
             .api_url(server.base_url.clone())
             .build()
@@ -505,7 +635,11 @@ mod tests {
 
     #[tokio::test]
     async fn default_mapper_sends_expected_bash_action() {
-        let server = spawn(serde_json::json!({ "status": "APPROVED" }), StatusCode::OK).await;
+        let server = spawn(
+            serde_json::json!({ "status": legacy_allowed_status() }),
+            StatusCode::OK,
+        )
+        .await;
         let client = SigilClient::builder("sk_fixture")
             .api_url(server.base_url.clone())
             .build()

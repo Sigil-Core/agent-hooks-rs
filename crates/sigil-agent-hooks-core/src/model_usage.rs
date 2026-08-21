@@ -262,6 +262,26 @@ mod tests {
     use std::sync::Arc;
     use tokio::{net::TcpListener, sync::oneshot};
 
+    mod support {
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/support/mod.rs"));
+    }
+    use support::{TEST_CERT_PEM, TestTlsListener};
+
+    struct AxumTlsListener(TestTlsListener);
+
+    impl axum::serve::Listener for AxumTlsListener {
+        type Io = tokio_rustls::server::TlsStream<tokio::net::TcpStream>;
+        type Addr = std::net::SocketAddr;
+
+        async fn accept(&mut self) -> (Self::Io, Self::Addr) {
+            self.0.accept().await.expect("TLS test accept")
+        }
+
+        fn local_addr(&self) -> std::io::Result<Self::Addr> {
+            self.0.local_addr()
+        }
+    }
+
     #[derive(Clone)]
     struct MockState {
         captures: Arc<Mutex<Vec<serde_json::Value>>>,
@@ -300,6 +320,7 @@ mod tests {
             });
         let listener = TcpListener::bind("127.0.0.1:0").await.expect("listener");
         let addr = listener.local_addr().expect("local addr");
+        let listener = AxumTlsListener(TestTlsListener::new(listener));
         let (tx, rx) = oneshot::channel();
         tokio::spawn(async move {
             let _ = axum::serve(listener, app)
@@ -310,7 +331,7 @@ mod tests {
         });
 
         TestServer {
-            base_url: format!("http://{addr}"),
+            base_url: format!("https://localhost:{}", addr.port()),
             captures,
             shutdown: Some(tx),
         }
@@ -318,7 +339,7 @@ mod tests {
 
     fn client_with_task(task_id: &str) -> SigilClient {
         SigilClient::builder("sk_fixture")
-            .api_url("http://127.0.0.1:9")
+            .api_url("https://127.0.0.1:9")
             .task_id(task_id)
             .fail_mode(FailMode::Closed)
             .build()
@@ -450,6 +471,7 @@ mod tests {
         let server = spawn().await;
         let client = SigilClient::builder("sk_fixture")
             .api_url(server.base_url.clone())
+            .additional_root_certificate_pem(TEST_CERT_PEM)
             .task_id("task-model-budget")
             .build()
             .expect("client");

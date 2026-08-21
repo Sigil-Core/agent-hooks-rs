@@ -1,7 +1,12 @@
 use reqwest::Client;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::time::{Duration, SystemTimeError};
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTimeError},
+};
 use thiserror::Error;
+
+use crate::decision::{AuthorizationCapability, JwksCache};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum FailMode {
@@ -70,12 +75,57 @@ impl<'de> Deserialize<'de> for FrameworkId {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "UPPERCASE")]
+/// Canonical authorization decision. Legacy `APPROVED` input deserializes as
+/// [`SigilDecision::Allowed`], and serialization always emits `ALLOWED`.
 pub enum SigilDecision {
     #[default]
-    Approved,
+    #[serde(rename = "ALLOWED", alias = "APPROVED")]
+    Allowed,
+    #[serde(rename = "DENIED")]
     Denied,
+    #[serde(rename = "PENDING")]
     Pending,
+}
+
+impl SigilDecision {
+    /// Source-compatible spelling for callers compiled against versions that
+    /// exposed `SigilDecision::Approved`. It is the canonical `Allowed` value
+    /// and therefore serializes as `ALLOWED`.
+    #[allow(non_upper_case_globals)]
+    #[deprecated(note = "use SigilDecision::Allowed")]
+    pub const Approved: Self = Self::Allowed;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// Controls whether a reached authorization response must be cryptographically
+/// verified before it can authorize execution.
+pub enum DecisionVerificationMode {
+    /// Preserve legacy execution for an `ALLOWED` or `APPROVED` response that
+    /// cannot be verified, but mark its authorization as legacy-unverified.
+    #[default]
+    Warn,
+    /// Deny an `ALLOWED` or `APPROVED` response unless its decision record and
+    /// execution attestation verify and bind to the current request.
+    Enforce,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// An Ed25519 public JWK accepted by the decision verifier.
+///
+/// Verification requires `kty = "OKP"`, `crv = "Ed25519"`, a unique nonempty
+/// `kid`, and an unpadded base64url `x`. Optional `use`, `key_ops`, and `alg`
+/// values must permit signature verification when present.
+pub struct DecisionJwk {
+    pub kty: String,
+    pub crv: String,
+    pub kid: String,
+    pub x: String,
+    #[serde(default)]
+    pub r#use: Option<String>,
+    #[serde(default)]
+    pub key_ops: Option<Vec<String>>,
+    #[serde(default)]
+    pub alg: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -117,6 +167,18 @@ pub struct SigilConfig {
     pub framework: FrameworkId,
     pub fail_mode: FailMode,
     pub request_timeout: Duration,
+    /// Warn preserves legacy authorization; enforce requires verified records.
+    pub decision_verification_mode: DecisionVerificationMode,
+    /// Expected lowercase SHA-256 policy hash. Required in enforce mode and
+    /// checked against both signed artifacts.
+    pub expected_policy_hash: Option<String>,
+    /// Optional pinned Ed25519 verification key. A matching pinned key takes
+    /// precedence over the origin-bound JWKS cache.
+    pub decision_record_jwk: Option<DecisionJwk>,
+    /// Exact issuer required on the execution attestation.
+    pub attestation_issuer: String,
+    #[doc(hidden)]
+    pub additional_root_certificate_pem: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone)]
@@ -128,15 +190,22 @@ pub struct SigilClientBuilder {
     pub(crate) framework: FrameworkId,
     pub(crate) fail_mode: FailMode,
     pub(crate) request_timeout: Duration,
+    pub(crate) decision_verification_mode: DecisionVerificationMode,
+    pub(crate) expected_policy_hash: Option<String>,
+    pub(crate) decision_record_jwk: Option<DecisionJwk>,
+    pub(crate) attestation_issuer: String,
+    pub(crate) additional_root_certificate_pem: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct SigilClient {
     pub(crate) config: SigilConfig,
     pub(crate) http: Client,
+    pub(crate) jwks_http: Client,
+    pub(crate) jwks_cache: Arc<JwksCache>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct SigilResult {
     pub decision: SigilDecision,
     pub hold_id: Option<String>,
@@ -144,6 +213,10 @@ pub struct SigilResult {
     pub message: Option<String>,
     pub policy_hash: Option<String>,
     pub fail_open: bool,
+    /// Opaque execution authority owned by this result. It is neither cloneable
+    /// nor serializable and is absent from serialized `SigilResult` values.
+    #[serde(skip)]
+    pub authorization: Option<AuthorizationCapability>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

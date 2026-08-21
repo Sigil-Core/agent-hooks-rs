@@ -2,6 +2,7 @@
   "framework": "agent-hooks",
   "agentId": "intent-agent",
   "txCommit": "6fd4947d41a7b08df3fede4821f93f9c92176a828b7fd9669772577a415e0f9d",
+  "request_nonce": "00000000-0000-4000-8000-000000000000",
   "intent": {
     "action": "bash",
     "command": "echo hi",

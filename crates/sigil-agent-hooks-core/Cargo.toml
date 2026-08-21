@@ -3,16 +3,22 @@ name = "sigil-agent-hooks-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 rust-version.workspace = true
 description = "Rust client for Sigil pre-tool authorization"
 
 [dependencies]
+base64.workspace = true
+ed25519-dalek.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
 axum = "0.8"
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
+trybuild = "1"

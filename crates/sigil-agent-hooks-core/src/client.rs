@@ -1,12 +1,17 @@
 use reqwest::StatusCode;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use uuid::Uuid;
 
+use crate::decision::{
+    AuthorizationVerificationContext, DecisionSurface, JwksCache, legacy_authorization,
+    log_decision_verification, strict_json_value, validate_canonical_origin,
+};
 use crate::types::{
-    FailMode, FrameworkId, SigilClient, SigilClientBuilder, SigilClientError, SigilConfig,
-    SigilDecision, SigilIntent, SigilResult,
+    DecisionJwk, DecisionVerificationMode, FailMode, FrameworkId, SigilClient, SigilClientBuilder,
+    SigilClientError, SigilConfig, SigilDecision, SigilIntent, SigilResult,
 };
 
 const DEFAULT_API_URL: &str = "https://sign.sigilcore.com";
@@ -21,6 +26,8 @@ struct AuthorizeRequest<'a> {
     agent_id: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     tx_commit: Option<&'a str>,
+    #[serde(rename = "request_nonce")]
+    request_nonce: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     chain_id: Option<u64>,
     intent: AuthorizeIntent<'a>,
@@ -64,6 +71,18 @@ struct AuthorizeResponse {
     policy_hash: Option<String>,
 }
 
+struct PreparedAuthorizeRequest {
+    body: String,
+    tx_commit: String,
+    request_nonce: String,
+}
+
+#[derive(Debug)]
+enum ResponseReadError {
+    Transport(String),
+    Protocol(String),
+}
+
 #[derive(Debug, Serialize)]
 struct IntentCommitPreimage<'a> {
     action: &'a str,
@@ -96,6 +115,11 @@ impl SigilClientBuilder {
             framework: FrameworkId::AgentHooks,
             fail_mode: FailMode::Closed,
             request_timeout: Duration::from_secs(DEFAULT_TIMEOUT_SECS),
+            decision_verification_mode: DecisionVerificationMode::Warn,
+            expected_policy_hash: None,
+            decision_record_jwk: None,
+            attestation_issuer: "sigil-core".to_string(),
+            additional_root_certificate_pem: None,
         }
     }
 
@@ -129,6 +153,32 @@ impl SigilClientBuilder {
         self
     }
 
+    pub fn decision_verification_mode(mut self, mode: DecisionVerificationMode) -> Self {
+        self.decision_verification_mode = mode;
+        self
+    }
+
+    pub fn expected_policy_hash(mut self, policy_hash: impl Into<String>) -> Self {
+        self.expected_policy_hash = Some(policy_hash.into());
+        self
+    }
+
+    pub fn decision_record_jwk(mut self, jwk: DecisionJwk) -> Self {
+        self.decision_record_jwk = Some(jwk);
+        self
+    }
+
+    pub fn attestation_issuer(mut self, issuer: impl Into<String>) -> Self {
+        self.attestation_issuer = issuer.into();
+        self
+    }
+
+    #[doc(hidden)]
+    pub fn additional_root_certificate_pem(mut self, pem: impl Into<Vec<u8>>) -> Self {
+        self.additional_root_certificate_pem = Some(pem.into());
+        self
+    }
+
     pub fn build(self) -> Result<SigilClient, SigilClientError> {
         let api_url = self.api_url.trim();
         if api_url.is_empty() {
@@ -137,9 +187,9 @@ impl SigilClientBuilder {
                 message: "must not be empty".to_string(),
             });
         }
-        reqwest::Url::parse(api_url).map_err(|err| SigilClientError::InvalidConfig {
+        let api_url = validate_canonical_origin(api_url).map_err(|_| SigilClientError::InvalidConfig {
             field: "api_url",
-            message: err.to_string(),
+            message: "must be an exact HTTPS root origin without credentials, path, query, or fragment".to_string(),
         })?;
 
         if self.request_timeout.is_zero() {
@@ -148,23 +198,74 @@ impl SigilClientBuilder {
                 message: "must be greater than zero".to_string(),
             });
         }
+        if self.decision_verification_mode == DecisionVerificationMode::Enforce
+            && self.expected_policy_hash.is_none()
+        {
+            return Err(SigilClientError::InvalidConfig {
+                field: "expected_policy_hash",
+                message: "is required in enforce mode".to_string(),
+            });
+        }
+        if self
+            .expected_policy_hash
+            .as_deref()
+            .is_some_and(|value| !is_lower_hex_64(value))
+        {
+            return Err(SigilClientError::InvalidConfig {
+                field: "expected_policy_hash",
+                message: "must be exactly 64 lowercase hexadecimal characters".to_string(),
+            });
+        }
+        let attestation_issuer = self.attestation_issuer.trim().to_string();
+        if attestation_issuer.is_empty() {
+            return Err(SigilClientError::InvalidConfig {
+                field: "attestation_issuer",
+                message: "must not be empty".to_string(),
+            });
+        }
 
-        let http = reqwest::Client::builder()
+        let root_certificate = self
+            .additional_root_certificate_pem
+            .as_deref()
+            .map(reqwest::Certificate::from_pem)
+            .transpose()
+            .map_err(|err| SigilClientError::InvalidConfig {
+                field: "additional_root_certificate_pem",
+                message: err.to_string(),
+            })?;
+        let mut http_builder = reqwest::Client::builder()
             .timeout(self.request_timeout)
+            .redirect(reqwest::redirect::Policy::none());
+        let mut jwks_http_builder = reqwest::Client::builder()
+            .timeout(self.request_timeout)
+            .redirect(reqwest::redirect::Policy::none());
+        if let Some(certificate) = root_certificate {
+            http_builder = http_builder.add_root_certificate(certificate.clone());
+            jwks_http_builder = jwks_http_builder.add_root_certificate(certificate);
+        }
+        let http = http_builder.build().map_err(SigilClientError::HttpClient)?;
+        let jwks_http = jwks_http_builder
             .build()
             .map_err(SigilClientError::HttpClient)?;
 
         Ok(SigilClient {
             config: SigilConfig {
                 api_key: self.api_key,
-                api_url: api_url.to_string(),
+                api_url,
                 agent_id: self.agent_id,
                 task_id: self.task_id,
                 framework: self.framework,
                 fail_mode: self.fail_mode,
                 request_timeout: self.request_timeout,
+                decision_verification_mode: self.decision_verification_mode,
+                expected_policy_hash: self.expected_policy_hash,
+                decision_record_jwk: self.decision_record_jwk,
+                attestation_issuer,
+                additional_root_certificate_pem: self.additional_root_certificate_pem,
             },
             http,
+            jwks_http,
+            jwks_cache: Arc::new(JwksCache::default()),
         })
     }
 }
@@ -194,19 +295,20 @@ impl SigilClient {
             .duration_since(UNIX_EPOCH)
             .map_err(SigilClientError::Clock)?
             .as_secs();
-        self.build_authorize_request_at(intent, now)
+        Ok(self.prepare_authorize_request_at(intent, now)?.body)
     }
 
-    fn build_authorize_request_at(
+    fn prepare_authorize_request_at(
         &self,
         intent: &SigilIntent,
         now: u64,
-    ) -> Result<String, SigilClientError> {
+    ) -> Result<PreparedAuthorizeRequest, SigilClientError> {
         validate_intent(intent)?;
         let tx_commit = match intent.tx_commit.as_deref() {
-            Some(value) => Some(value.to_string()),
-            None => Some(generate_intent_commit_at(intent, now)?),
+            Some(value) => value.to_string(),
+            None => generate_intent_commit_at(intent, now)?,
         };
+        let request_nonce = Uuid::new_v4().to_string();
         let task_id = self.resolve_task_id(intent);
 
         let request = AuthorizeRequest {
@@ -216,7 +318,8 @@ impl SigilClient {
                 .as_deref()
                 .or(self.config.agent_id.as_deref())
                 .unwrap_or("agent"),
-            tx_commit: tx_commit.as_deref(),
+            tx_commit: Some(tx_commit.as_str()),
+            request_nonce: &request_nonce,
             chain_id: intent.chain_id,
             intent: AuthorizeIntent {
                 action: &intent.action,
@@ -239,7 +342,11 @@ impl SigilClient {
         };
 
         let json = serde_json::to_string_pretty(&request).map_err(SigilClientError::Serialize)?;
-        Ok(format!("{json}\n"))
+        Ok(PreparedAuthorizeRequest {
+            body: format!("{json}\n"),
+            tx_commit,
+            request_nonce,
+        })
     }
 
     pub async fn check_intent(
@@ -254,16 +361,29 @@ impl SigilClient {
         intent: &SigilIntent,
         timestamp_override: Option<u64>,
     ) -> Result<SigilResult, SigilClientError> {
-        let body = match timestamp_override {
-            Some(now) => self.build_authorize_request_at(intent, now)?,
-            None => self.build_authorize_request(intent)?,
+        if self.config.decision_verification_mode == DecisionVerificationMode::Warn
+            && self.config.expected_policy_hash.is_none()
+        {
+            log_decision_verification(
+                crate::DecisionVerificationReason::PolicyBinding,
+                DecisionVerificationMode::Warn,
+                DecisionSurface::Authorize,
+            );
+        }
+        let now = match timestamp_override {
+            Some(now) => now,
+            None => SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(SigilClientError::Clock)?
+                .as_secs(),
         };
+        let prepared = self.prepare_authorize_request_at(intent, now)?;
         let mut response = match self
             .http
             .post(format!("{}/v1/authorize", self.config.api_url))
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", self.config.api_key))
-            .body(body)
+            .body(prepared.body)
             .send()
             .await
         {
@@ -273,69 +393,135 @@ impl SigilClient {
             }
         };
 
-        if matches!(
-            response.status(),
-            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN
-        ) {
+        let response_status = response.status();
+        if response_status == StatusCode::UNAUTHORIZED {
             return Ok(SigilResult {
                 decision: SigilDecision::Denied,
                 error_code: Some("SIGIL_AUTH_FAILURE".to_string()),
-                message: Some(format!("Authentication failed ({})", response.status())),
+                message: Some(format!("Authentication failed ({response_status})")),
                 ..SigilResult::default()
             });
         }
 
-        if response.status().is_server_error() {
+        if response_status.is_server_error() {
             return Ok(
-                self.classify_unreachable(format!("Sigil server error ({})", response.status()))
+                self.classify_invalid_response(format!("Sigil server returned {response_status}"))
+            );
+        }
+        if !response_status.is_success() && response_status != StatusCode::FORBIDDEN {
+            return Ok(
+                self.classify_invalid_response(format!("Sigil server returned {response_status}"))
             );
         }
 
         let response_body = match read_response_body(&mut response).await {
             Ok(body) => body,
-            Err(err) => return Ok(self.classify_unreachable(err)),
+            Err(ResponseReadError::Transport(err)) => {
+                if response_status == StatusCode::FORBIDDEN {
+                    return Ok(auth_failure(response_status));
+                }
+                return Ok(self.classify_invalid_response(err));
+            }
+            Err(ResponseReadError::Protocol(err)) => {
+                if response_status == StatusCode::FORBIDDEN {
+                    return Ok(auth_failure(response_status));
+                }
+                return Ok(self.classify_invalid_response(err));
+            }
         };
 
-        let data: AuthorizeResponse = match serde_json::from_slice(&response_body) {
+        let value = match strict_json_value(&response_body, MAX_RESPONSE_BYTES) {
+            Ok(value) => value,
+            Err(_) => {
+                if response_status == StatusCode::FORBIDDEN {
+                    return Ok(auth_failure(response_status));
+                }
+                return Ok(self.classify_invalid_response("invalid authorization JSON".to_string()));
+            }
+        };
+        let data: AuthorizeResponse = match serde_json::from_value(value.clone()) {
             Ok(data) => data,
-            Err(err) => return Ok(self.classify_unreachable(err.to_string())),
+            Err(err) => {
+                if response_status == StatusCode::FORBIDDEN {
+                    return Ok(auth_failure(response_status));
+                }
+                return Ok(self.classify_invalid_response(err.to_string()));
+            }
         };
-
+        if response_status == StatusCode::FORBIDDEN && data.status != "DENIED" {
+            return Ok(auth_failure(response_status));
+        }
+        let verification = self
+            .verify_authorization_response(
+                &value,
+                &AuthorizationVerificationContext {
+                    tx_commit: prepared.tx_commit,
+                    request_nonce: prepared.request_nonce,
+                    surface: DecisionSurface::Authorize,
+                    execution: true,
+                    now_unix_seconds: timestamp_override.map(|value| value as i64),
+                },
+            )
+            .await;
+        if let Some(reason) = verification.reason {
+            log_decision_verification(
+                reason,
+                self.config.decision_verification_mode,
+                DecisionSurface::Authorize,
+            );
+        }
         let policy_hash = data.policy_hash;
-
-        match data.status.as_str() {
-            "APPROVED" => Ok(SigilResult {
-                decision: SigilDecision::Approved,
+        match verification.decision {
+            SigilDecision::Allowed => Ok(SigilResult {
+                decision: SigilDecision::Allowed,
                 policy_hash,
+                authorization: verification.authorization,
                 ..SigilResult::default()
             }),
-            "PENDING" => Ok(SigilResult {
+            SigilDecision::Pending => Ok(SigilResult {
                 decision: SigilDecision::Pending,
                 hold_id: data.hold_id,
                 policy_hash,
                 message: data.message,
                 ..SigilResult::default()
             }),
-            _ => Ok(SigilResult {
-                decision: SigilDecision::Denied,
-                error_code: Some(
-                    data.error_code
-                        .unwrap_or_else(|| "SIGIL_POLICY_VIOLATION".to_string()),
-                ),
-                message: Some(
-                    data.message
-                        .unwrap_or_else(|| "Action blocked by policy".to_string()),
-                ),
-                policy_hash,
-                ..SigilResult::default()
-            }),
+            SigilDecision::Denied => {
+                let verification_failed = verification.reason.is_some_and(|reason| {
+                    data.status != "DENIED"
+                        || !matches!(reason, crate::DecisionVerificationReason::RecordMissing)
+                });
+                Ok(SigilResult {
+                    decision: SigilDecision::Denied,
+                    error_code: Some(if verification_failed {
+                        "SIGIL_DECISION_VERIFICATION_FAILED".to_string()
+                    } else {
+                        data.error_code
+                            .unwrap_or_else(|| "SIGIL_POLICY_VIOLATION".to_string())
+                    }),
+                    message: Some(if verification_failed {
+                        format!(
+                            "Authorization response verification failed ({})",
+                            verification
+                                .reason
+                                .map(|reason| reason.as_str())
+                                .unwrap_or("malformed")
+                        )
+                    } else {
+                        data.message
+                            .unwrap_or_else(|| "Action blocked by policy".to_string())
+                    }),
+                    policy_hash,
+                    ..SigilResult::default()
+                })
+            }
         }
     }
 
     fn classify_unreachable(&self, message: String) -> SigilResult {
         match self.config.fail_mode {
             FailMode::Open => SigilResult {
-                decision: SigilDecision::Approved,
+                decision: SigilDecision::Allowed,
+                authorization: Some(legacy_authorization()),
                 message: Some("Sigil unreachable - fail open".to_string()),
                 fail_open: true,
                 ..SigilResult::default()
@@ -346,6 +532,17 @@ impl SigilClient {
                 message: Some(message),
                 ..SigilResult::default()
             },
+        }
+    }
+
+    fn classify_invalid_response(&self, message: String) -> SigilResult {
+        SigilResult {
+            decision: SigilDecision::Denied,
+            error_code: Some("SIGIL_DECISION_VERIFICATION_FAILED".to_string()),
+            message: Some(format!(
+                "Authorization response verification failed ({message})"
+            )),
+            ..SigilResult::default()
         }
     }
 }
@@ -362,6 +559,13 @@ fn default_task_id() -> String {
             format!("rust-task-{}", &format!("{digest:x}")[..16])
         })
         .clone()
+}
+
+fn is_lower_hex_64(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn generate_intent_commit_at(intent: &SigilIntent, now: u64) -> Result<String, SigilClientError> {
@@ -427,21 +631,36 @@ fn validate_intent(intent: &SigilIntent) -> Result<(), SigilClientError> {
     Ok(())
 }
 
-async fn read_response_body(response: &mut reqwest::Response) -> Result<Vec<u8>, String> {
+fn auth_failure(status: StatusCode) -> SigilResult {
+    SigilResult {
+        decision: SigilDecision::Denied,
+        error_code: Some("SIGIL_AUTH_FAILURE".to_string()),
+        message: Some(format!("Authentication failed ({status})")),
+        ..SigilResult::default()
+    }
+}
+
+async fn read_response_body(
+    response: &mut reqwest::Response,
+) -> Result<Vec<u8>, ResponseReadError> {
     if let Some(content_length) = response.content_length()
         && content_length > MAX_RESPONSE_BYTES as u64
     {
-        return Err(format!(
+        return Err(ResponseReadError::Protocol(format!(
             "Sigil response exceeded {MAX_RESPONSE_BYTES} bytes"
-        ));
+        )));
     }
 
     let mut body = Vec::new();
-    while let Some(chunk) = response.chunk().await.map_err(|err| err.to_string())? {
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|err| ResponseReadError::Transport(err.to_string()))?
+    {
         if body.len() + chunk.len() > MAX_RESPONSE_BYTES {
-            return Err(format!(
+            return Err(ResponseReadError::Protocol(format!(
                 "Sigil response exceeded {MAX_RESPONSE_BYTES} bytes"
-            ));
+            )));
         }
         body.extend_from_slice(&chunk);
     }
@@ -456,6 +675,26 @@ mod tests {
     use axum::{Router, body::Bytes, extract::State, http::StatusCode, routing::post};
     use std::sync::{Arc, Mutex};
     use tokio::{net::TcpListener, sync::oneshot};
+
+    mod support {
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/support/mod.rs"));
+    }
+    use support::{TEST_CERT_PEM, TestTlsListener};
+
+    struct AxumTlsListener(TestTlsListener);
+
+    impl axum::serve::Listener for AxumTlsListener {
+        type Io = tokio_rustls::server::TlsStream<tokio::net::TcpStream>;
+        type Addr = std::net::SocketAddr;
+
+        async fn accept(&mut self) -> (Self::Io, Self::Addr) {
+            self.0.accept().await.expect("TLS test accept")
+        }
+
+        fn local_addr(&self) -> std::io::Result<Self::Addr> {
+            self.0.local_addr()
+        }
+    }
 
     #[derive(Clone)]
     struct MockState {
@@ -494,6 +733,7 @@ mod tests {
             .await
             .expect("listener should bind");
         let addr = listener.local_addr().expect("local addr");
+        let listener = AxumTlsListener(TestTlsListener::new(listener));
         let (tx, rx) = oneshot::channel();
         tokio::spawn(async move {
             let _ = axum::serve(listener, app)
@@ -504,7 +744,7 @@ mod tests {
         });
 
         TestServer {
-            base_url: format!("http://{addr}"),
+            base_url: format!("https://localhost:{}", addr.port()),
             captures,
             shutdown: Some(tx),
         }
@@ -548,6 +788,7 @@ mod tests {
         let server = spawn().await;
         let client = SigilClient::builder("sk_fixture")
             .api_url(server.base_url.clone())
+            .additional_root_certificate_pem(TEST_CERT_PEM)
             .agent_id("config-agent")
             .framework(FrameworkId::AgentHooks)
             .build()
@@ -603,6 +844,7 @@ mod tests {
         let server = spawn().await;
         let client = SigilClient::builder("sk_fixture")
             .api_url(server.base_url.clone())
+            .additional_root_certificate_pem(TEST_CERT_PEM)
             .agent_id("fixture-agent")
             .task_id("fixture-task")
             .framework(FrameworkId::AgentHooks)
@@ -644,6 +886,7 @@ mod tests {
         let server = spawn().await;
         let client = SigilClient::builder("sk_fixture")
             .api_url(server.base_url.clone())
+            .additional_root_certificate_pem(TEST_CERT_PEM)
             .task_id("fixture-task")
             .build()
             .expect("client should build");
@@ -668,6 +911,16 @@ mod tests {
         )
         .expect("JSON body");
         assert!(body["intent"].get("method").is_none());
+    }
+
+    #[test]
+    fn builder_stores_the_normalized_attestation_issuer() {
+        let client = SigilClient::builder("sk_fixture")
+            .attestation_issuer("  sigil-core  ")
+            .build()
+            .expect("client should build");
+
+        assert_eq!(client.config.attestation_issuer, "sigil-core");
     }
 
     #[test]

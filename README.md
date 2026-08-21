@@ -9,7 +9,12 @@ This workspace provides two crates:
 
 The companion TypeScript package lives at [`@sigilcore/agent-hooks`](https://github.com/Sigil-Core/agent-hooks). Both packages share contract fixtures that guarantee wire-format parity (see [architecture.md](./architecture.md)).
 
-Version 0.3.0 adds schema-closed Rust wire types for compiled response-policy
+Version 0.4.0 adds signed decision-record verification, canonical `ALLOWED`
+output, fresh request nonces, warn/enforce rollout modes, and opaque execution
+capabilities. The legacy `APPROVED` wire literal remains a permanent
+deserialize-only input alias and is never re-emitted.
+
+Version 0.3.0 added schema-closed Rust wire types for compiled response-policy
 format 1 and `sof-response-decision/v1`. This is serialization and fixture
 parity only. Neither Rust crate evaluates response policies, inspects tool
 results, or provides native IronClaw response enforcement.
@@ -43,7 +48,8 @@ Use `SigilClient` directly when you want framework-agnostic pre-tool authorizati
 
 ```rust
 use sigil_agent_hooks_core::{
-    FailMode, SigilClient, SigilDecision, SigilIntent, build_rejection_context,
+    FailMode, SigilClient, SigilIntent, authorization_permits_execution,
+    build_rejection_context,
 };
 
 #[tokio::main]
@@ -62,15 +68,12 @@ async fn main() {
 
     let result = client.check_intent(&intent).await.expect("client error");
 
-    match result.decision {
-        SigilDecision::Approved => {
-            // Proceed with tool execution
-        }
-        SigilDecision::Denied | SigilDecision::Pending => {
-            let rejection = build_rejection_context(&result, &intent.action);
-            eprintln!("Blocked: {}", rejection.sigil_message);
-            // Feed rejection context back to the agent
-        }
+    if authorization_permits_execution(&result) {
+        // Proceed with tool execution only through the opaque capability check.
+    } else {
+        let rejection = build_rejection_context(&result, &intent.action, None);
+        eprintln!("Blocked: {}", rejection.sigil_message);
+        // Feed rejection context back to the agent.
     }
 }
 ```
@@ -174,12 +177,16 @@ impl ToolIntentMapper for MyMapper {
 | Builder method | Type | Default | Description |
 |---|---|---|---|
 | `builder(api_key)` | `impl Into<String>` | (required) | Sigil API key (`sk_sigil_...`) |
-| `.api_url(url)` | `impl Into<String>` | `https://sign.sigilcore.com` | Sigil Sign API URL |
+| `.api_url(url)` | `impl Into<String>` | `https://sign.sigilcore.com` | Exact HTTPS root origin for Sigil Sign; credentials, paths, queries, and fragments are rejected. |
 | `.agent_id(id)` | `impl Into<String>` | `"agent"` | Identifier for this agent |
 | `.task_id(id)` | `impl Into<String>` | generated when needed | Stable task id for execution limits and model budgets |
 | `.framework(id)` | `FrameworkId` | `AgentHooks` | Framework identifier for the authorize request |
 | `.fail_mode(mode)` | `FailMode` | `Closed` | Behavior when Sigil is unreachable |
 | `.request_timeout(dur)` | `Duration` | `5s` | HTTP request timeout |
+| `.decision_verification_mode(mode)` | `DecisionVerificationMode` | `Warn` | Verify and log legacy traffic in Wave 1, or require signed authorization in `Enforce`. |
+| `.expected_policy_hash(hash)` | `impl Into<String>` | unset | Exact lowercase 64-hex SHA-256 pin; required at build time in enforce mode. Warn mode without a pin logs a diagnostic on every authorization call. |
+| `.decision_record_jwk(jwk)` | `DecisionJwk` | JWKS discovery | Static Ed25519 key pin; takes precedence over network discovery. |
+| `.attestation_issuer(issuer)` | `impl Into<String>` | `sigil-core` | Expected Intent Attestation issuer. |
 
 `SigilIntent` fields:
 
@@ -208,11 +215,20 @@ Returns `SigilResult { decision: Denied, error_code: Some("SIGIL_UNREACHABLE"), 
 
 ### `FailMode::Open`
 
-Returns `SigilResult { decision: Approved, fail_open: true, .. }` when Sigil is unreachable. Use in development or non-financial workflows where a brief Sigil outage should not halt operations.
+Returns `SigilResult { decision: Allowed, fail_open: true, .. }` with a distinct
+unverified capability when Sigil is unreachable; `fail_open` records its
+transport provenance. Use in development or non-financial workflows where a
+brief Sigil outage should not halt operations.
 
 ### What counts as unreachable
 
-Network error, DNS failure, connection refused, request timeout, 5xx response, non-JSON response body, or response exceeding 64 KiB. Authentication failures (401/403) are classified as `SIGIL_AUTH_FAILURE`, not unreachability.
+A request is unreachable only when no HTTP response is received, such as a DNS
+failure, connection refusal, or pre-response timeout. Once a response is
+received, a non-success status other than a valid 403 denial, malformed JSON or
+schema, body-protocol failure, and an oversized body deny and never activate
+fail-open. HTTP 401 and malformed or non-`DENIED` HTTP 403 responses return
+`SIGIL_AUTH_FAILURE`; a valid HTTP 403 `DENIED` body is parsed as a policy result
+and its decision record is verified when present.
 
 ### Difference from the TypeScript package
 
@@ -273,7 +289,7 @@ The TypeScript package defaults to `FailMode::Open` for backward compatibility w
 
 ## Wire Parity
 
-Both this repo and `agent-hooks` (TypeScript) share contract fixtures in `contract-fixtures/v1/` that pin the exact JSON wire format of `/v1/authorize` request bodies. Fixture integrity is verified by SHA-256 checksums in both test suites. A mismatch in either language fails CI.
+Both this repo and `agent-hooks` (TypeScript) share contract fixtures in `contract-fixtures/v1/` that pin the exact JSON wire format of `/v1/authorize` request bodies and decision-verification outcomes. Fixture integrity is verified by SHA-256 checksums in both test suites, and `contract-fixtures/UPSTREAM_AGENT_HOOKS_TS_COMMIT` pins the exact merged TypeScript fixture source. A mismatch in either language fails CI.
 
 Release 1 response-wire fixtures live in `contract-fixtures/response-v1/`.
 They pin the Phase 0 intent, envelope, and fixture receipts, canonical Policy

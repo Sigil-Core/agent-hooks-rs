@@ -2,6 +2,7 @@
   "framework": "agent-hooks",
   "agentId": "fixture-agent",
   "txCommit": "1111111111111111111111111111111111111111111111111111111111111111",
+  "request_nonce": "00000000-0000-4000-8000-000000000000",
   "intent": {
     "action": "bash",
     "command": "ls -la",
