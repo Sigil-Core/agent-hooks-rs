@@ -137,6 +137,7 @@ impl IronclawSigilHookBuilder {
                 Some(jwk) => rebuilt.decision_record_jwk(jwk.clone()),
                 None => rebuilt,
             };
+            #[cfg(any(test, feature = "test-certificates"))]
             let rebuilt = match &self.client.config().additional_root_certificate_pem {
                 Some(pem) => rebuilt.additional_root_certificate_pem(pem.clone()),
                 None => rebuilt,

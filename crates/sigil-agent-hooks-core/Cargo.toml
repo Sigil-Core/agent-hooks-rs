@@ -7,6 +7,10 @@ repository.workspace = true
 rust-version.workspace = true
 description = "Rust client for Sigil pre-tool authorization"
 
+[features]
+default = []
+test-certificates = []
+
 [dependencies]
 base64.workspace = true
 ed25519-dalek.workspace = true
@@ -22,3 +26,11 @@ uuid.workspace = true
 axum = "0.8"
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
 trybuild = "1"
+
+[[test]]
+name = "client_behavior"
+required-features = ["test-certificates"]
+
+[[test]]
+name = "contract_fixtures"
+required-features = ["test-certificates"]

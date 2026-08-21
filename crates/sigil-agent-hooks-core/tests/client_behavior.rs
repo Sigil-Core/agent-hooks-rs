@@ -288,7 +288,7 @@ fn fixture_bash_intent() -> SigilIntent {
 }
 
 #[tokio::test]
-async fn approved_response_preserves_policy_hash() {
+async fn unsigned_legacy_response_does_not_expose_an_unverified_policy_hash() {
     let server = spawn_server(MockResponse {
         status: StatusCode::OK,
         body: MockBody::Json(serde_json::json!({
@@ -310,7 +310,7 @@ async fn approved_response_preserves_policy_hash() {
         .expect("check should succeed");
 
     assert_eq!(result.decision, SigilDecision::Allowed, "{result:?}");
-    assert_eq!(result.policy_hash.as_deref(), Some("policy_hash_1"));
+    assert_eq!(result.policy_hash, None);
 }
 
 #[tokio::test]
@@ -319,6 +319,7 @@ async fn denied_response_round_trips_error_code() {
         status: StatusCode::OK,
         body: MockBody::Json(serde_json::json!({
             "status": "DENIED",
+            "policyHash": "unverified_denied_policy_hash",
             "error_code": "SIGIL_BASH_BLOCKED",
             "message": "blocked",
         })),
@@ -337,6 +338,7 @@ async fn denied_response_round_trips_error_code() {
 
     assert_eq!(result.decision, SigilDecision::Denied);
     assert_eq!(result.error_code.as_deref(), Some("SIGIL_BASH_BLOCKED"));
+    assert_eq!(result.policy_hash, None);
 }
 
 #[tokio::test]
@@ -346,6 +348,7 @@ async fn pending_response_round_trips_hold_id() {
         body: MockBody::Json(serde_json::json!({
             "status": "PENDING",
             "holdId": "hold_123",
+            "policyHash": "unverified_pending_policy_hash",
             "message": "approval required",
         })),
         delay: Duration::ZERO,
@@ -363,6 +366,7 @@ async fn pending_response_round_trips_hold_id() {
 
     assert_eq!(result.decision, SigilDecision::Pending);
     assert_eq!(result.hold_id.as_deref(), Some("hold_123"));
+    assert_eq!(result.policy_hash, None);
 }
 
 #[tokio::test]

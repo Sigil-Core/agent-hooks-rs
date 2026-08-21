@@ -216,6 +216,15 @@ async fn shared_decision_vectors_match_the_typescript_contract() {
             "capability vector {}",
             vector.id
         );
+        let expected_policy_hash = result
+            .is_verified()
+            .then_some(fixture.context.expected_policy_hash.as_str());
+        assert_eq!(
+            result.verified_policy_hash(),
+            expected_policy_hash,
+            "verified policy hash vector {}",
+            vector.id
+        );
     }
 }
 

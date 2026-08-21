@@ -25,13 +25,18 @@ const CONSUMER_VERSION: &str = "0.4.0";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+/// Authoritative Sign endpoint surface bound into a decision record.
 pub enum DecisionSurface {
+    /// The authorization endpoint that evaluates a tool intent.
     Authorize,
+    /// The test-run endpoint used to evaluate a policy without execution.
     TestRun,
+    /// The hold-resolution endpoint that finalizes a pending decision.
     HoldResolve,
 }
 
 impl DecisionSurface {
+    /// Returns the canonical signed-record literal for this surface.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Authorize => "authorize",
@@ -43,23 +48,38 @@ impl DecisionSurface {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+/// Stable reason why signed authorization verification did not succeed.
 pub enum DecisionVerificationReason {
+    /// The decision-record or attestation signature did not verify.
     Signature,
+    /// The token validity window is outside the accepted clock skew.
     Expired,
+    /// The issuer, audience, or trusted origin did not match.
     Audience,
+    /// The signed endpoint surface did not match the request.
     Surface,
+    /// The signed intent digest did not match the request commitment.
     IntentBinding,
+    /// The signed policy digest did not match the configured policy.
     PolicyBinding,
+    /// The signed nonce did not match the in-flight request.
     Nonce,
+    /// The response decision literal did not match the signed decision.
     LiteralMismatch,
+    /// The response did not contain a signed decision record.
     RecordMissing,
+    /// No trusted verification key was available.
     KeyUnavailable,
+    /// An allowed execution response omitted its intent attestation.
     AttestationMissing,
+    /// The intent attestation did not match the verified decision record.
     AttestationMismatch,
+    /// The response or signed token was not structurally valid.
     Malformed,
 }
 
 impl DecisionVerificationReason {
+    /// Returns the stable diagnostic literal for this reason.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Signature => "signature",
@@ -80,6 +100,7 @@ impl DecisionVerificationReason {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+/// Verified bindings carried by a non-forgeable authorization capability.
 pub struct VerifiedAuthorization {
     intent_hash: String,
     policy_hash: String,
@@ -87,10 +108,12 @@ pub struct VerifiedAuthorization {
 }
 
 impl VerifiedAuthorization {
+    /// Returns the SHA-256 intent binding from the verified record.
     pub fn intent_hash(&self) -> &str {
         &self.intent_hash
     }
 
+    /// Returns the SHA-256 policy binding from the verified record.
     pub fn policy_hash(&self) -> &str {
         &self.policy_hash
     }
@@ -108,6 +131,7 @@ enum AuthorizationKind {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+/// Opaque authority that an execution adapter must possess before continuing.
 pub struct AuthorizationCapability {
     kind: AuthorizationKind,
 }
@@ -122,26 +146,40 @@ struct CachedJwks {
 pub(crate) struct JwksCache(Mutex<HashMap<String, CachedJwks>>);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// In-flight request data that a signed decision must match exactly.
 pub struct AuthorizationVerificationContext {
+    /// Exact transaction commitment whose SHA-256 digest binds the decision to
+    /// this request.
     pub tx_commit: String,
+    /// Consumer-generated nonce that prevents reuse on another in-flight
+    /// request.
     pub request_nonce: String,
+    /// Authoritative endpoint surface expected in the signed record.
     pub surface: DecisionSurface,
+    /// Whether this verification can grant execution authority.
     pub execution: bool,
+    /// Optional pinned Unix time used only for deterministic verification
+    /// tests; production verification uses the system clock.
     pub now_unix_seconds: Option<i64>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
+/// Decision, diagnostic, and opaque capability produced by record verification.
 pub struct AuthorizationVerificationResult {
+    /// Canonical decision after applying the configured verification mode.
     pub decision: SigilDecision,
+    /// Verification failure reason, or `None` after successful verification.
     pub reason: Option<DecisionVerificationReason>,
     pub(crate) authorization: Option<AuthorizationCapability>,
 }
 
 impl AuthorizationVerificationResult {
+    /// Returns whether this result carries execution authority.
     pub fn permits_execution(&self) -> bool {
         self.decision == SigilDecision::Allowed && self.authorization.is_some()
     }
 
+    /// Returns whether execution authority came from verified signed artifacts.
     pub fn is_verified(&self) -> bool {
         matches!(
             self.authorization,
@@ -151,6 +189,7 @@ impl AuthorizationVerificationResult {
         )
     }
 
+    /// Returns whether warn mode retained legacy, unverified authority.
     pub fn is_legacy_unverified(&self) -> bool {
         matches!(
             self.authorization,
@@ -158,6 +197,16 @@ impl AuthorizationVerificationResult {
                 kind: AuthorizationKind::Legacy(_),
             })
         )
+    }
+
+    /// Returns the verified policy hash without exposing the capability token.
+    pub fn verified_policy_hash(&self) -> Option<&str> {
+        match self.authorization.as_ref() {
+            Some(AuthorizationCapability {
+                kind: AuthorizationKind::Verified(capability),
+            }) => Some(capability.policy_hash()),
+            _ => None,
+        }
     }
 }
 
@@ -268,6 +317,7 @@ impl<'de> Deserialize<'de> for StrictValue {
     }
 }
 
+/// Parses the frozen input decision vocabulary into the canonical Rust enum.
 pub fn normalize_decision_literal(
     value: &str,
 ) -> Result<SigilDecision, DecisionVerificationReason> {
@@ -279,10 +329,12 @@ pub fn normalize_decision_literal(
     }
 }
 
+/// Returns whether a result carries both an allowed decision and opaque authority.
 pub fn authorization_permits_execution(result: &SigilResult) -> bool {
     result.decision == SigilDecision::Allowed && result.authorization.is_some()
 }
 
+/// Returns verified signed bindings when the result carries verified authority.
 pub fn verified_authorization(result: &SigilResult) -> Option<&VerifiedAuthorization> {
     match result.authorization.as_ref() {
         Some(AuthorizationCapability {
@@ -627,35 +679,42 @@ fn now_unix_seconds() -> i64 {
         .unwrap_or_default()
 }
 
-fn validate_decision_claims(
-    token: &ParsedJws,
+fn validate_decision_identity(
+    claims: &Map<String, Value>,
     origin: &str,
-    context: &AuthorizationVerificationContext,
-    body: &Map<String, Value>,
-    body_decision: SigilDecision,
-) -> VerificationResult<(String, String)> {
-    let claims = &token.claims;
-    validate_times(
-        claims,
-        context.now_unix_seconds.unwrap_or_else(now_unix_seconds),
-    )?;
+    surface: DecisionSurface,
+) -> VerificationResult<()> {
     if required_string(claims, "iss")? != origin || required_string(claims, "aud")? != origin {
         return Err(VerificationFailure(DecisionVerificationReason::Audience));
     }
-    if required_string(claims, "surface")? != context.surface.as_str() {
+    if required_string(claims, "surface")? != surface.as_str() {
         return Err(VerificationFailure(DecisionVerificationReason::Surface));
     }
+    Ok(())
+}
+
+fn validate_signed_decision(
+    claims: &Map<String, Value>,
+    body_decision: &SigilDecision,
+) -> VerificationResult<()> {
     let signed_literal = required_string(claims, "decision")?;
     let signed_decision =
         normalize_decision_literal(signed_literal).map_err(VerificationFailure)?;
     if signed_literal == "APPROVED" {
         return Err(VerificationFailure(DecisionVerificationReason::Malformed));
     }
-    if signed_decision != body_decision {
+    if signed_decision != *body_decision {
         return Err(VerificationFailure(
             DecisionVerificationReason::LiteralMismatch,
         ));
     }
+    Ok(())
+}
+
+fn validate_decision_bindings(
+    claims: &Map<String, Value>,
+    context: &AuthorizationVerificationContext,
+) -> VerificationResult<(String, String)> {
     let intent_hash = required_string(claims, "intentHash")?;
     if !is_hex_64(intent_hash) || intent_hash != sha256_hex(&context.tx_commit) {
         return Err(VerificationFailure(
@@ -671,12 +730,21 @@ fn validate_decision_claims(
     if claims.get("requestNonce").and_then(Value::as_str) != Some(context.request_nonce.as_str()) {
         return Err(VerificationFailure(DecisionVerificationReason::Nonce));
     }
+    Ok((intent_hash.to_string(), policy_hash.to_string()))
+}
+
+fn validate_decision_surface_claims(
+    claims: &Map<String, Value>,
+    context: &AuthorizationVerificationContext,
+    body: &Map<String, Value>,
+    body_decision: &SigilDecision,
+) -> VerificationResult<()> {
     if context.surface == DecisionSurface::TestRun
         && claims.get("test_run").and_then(Value::as_bool) != Some(true)
     {
         return Err(VerificationFailure(DecisionVerificationReason::Surface));
     }
-    if body_decision == SigilDecision::Pending {
+    if *body_decision == SigilDecision::Pending {
         let body_hold = body
             .get("hold_id")
             .or_else(|| body.get("holdId"))
@@ -694,7 +762,26 @@ fn validate_decision_claims(
     {
         return Err(VerificationFailure(DecisionVerificationReason::Surface));
     }
-    Ok((intent_hash.to_string(), policy_hash.to_string()))
+    Ok(())
+}
+
+fn validate_decision_claims(
+    token: &ParsedJws,
+    origin: &str,
+    context: &AuthorizationVerificationContext,
+    body: &Map<String, Value>,
+    body_decision: SigilDecision,
+) -> VerificationResult<(String, String)> {
+    let claims = &token.claims;
+    validate_times(
+        claims,
+        context.now_unix_seconds.unwrap_or_else(now_unix_seconds),
+    )?;
+    validate_decision_identity(claims, origin, context.surface)?;
+    validate_signed_decision(claims, &body_decision)?;
+    let bindings = validate_decision_bindings(claims, context)?;
+    validate_decision_surface_claims(claims, context, body, &body_decision)?;
+    Ok(bindings)
 }
 
 fn validate_attestation_claims(
@@ -726,6 +813,7 @@ fn validate_attestation_claims(
 }
 
 impl SigilClient {
+    /// Verifies a raw authorization response against its exact request bindings.
     pub async fn verify_authorization_response(
         &self,
         body: &Value,
@@ -1081,7 +1169,9 @@ mod tests {
             .expect("cache lock")
             .get_mut(&origin)
             .expect("cache entry")
-            .expires_at = Instant::now() - Duration::from_secs(1);
+            .expires_at = Instant::now()
+            .checked_sub(Duration::from_secs(1))
+            .expect("one second before now");
         fetch_jwks(&http, &cache, &origin, false)
             .await
             .expect("expired JWKS refresh");

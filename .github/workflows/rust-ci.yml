@@ -60,6 +60,8 @@ jobs:
       - if: steps.changes.outputs.rust_changed == 'true'
         run: cargo fmt --check
       - if: steps.changes.outputs.rust_changed == 'true'
+        run: cargo check --workspace --no-default-features
+      - if: steps.changes.outputs.rust_changed == 'true'
         run: node scripts/decision-literal-gate.mjs
       - if: steps.changes.outputs.rust_changed == 'true'
         run: node scripts/decision-architecture-gate.mjs

@@ -127,8 +127,10 @@ transport path. Neither path can counterfeit the verified capability.
 - Malformed JOSE vectors: 6 minimum enforced; all fail closed.
 - Trust bootstrap: static TLS root origin, response-origin rejection, pinned-key
   precedence, redirect rejection, five-minute cache expiry, 64 KiB response and
-  16-key limits, cold-cache outage, and rotation overlap are covered. The leaf
-  certificate is valid from `2026-08-21T03:36:00Z`
+  16-key limits, cold-cache outage, and rotation overlap are covered. Custom
+  test roots require the non-default `test-certificates` feature and are absent
+  from default production builds. The leaf certificate is valid from
+  `2026-08-21T03:36:00Z`
   (`2026-08-20T23:36:00-04:00`) through `2036-08-18T03:36:00Z`; live TLS
   handshakes use the system clock, so the evidence date is inside that interval.
 - Capability gate: external construction, deserialization, and cloning fail to

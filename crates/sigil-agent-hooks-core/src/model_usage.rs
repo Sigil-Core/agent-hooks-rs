@@ -491,7 +491,7 @@ mod tests {
         .expect("record");
 
         let result = check_model_budget(&client, None).await.expect("budget");
-        assert_eq!(result.policy_hash.as_deref(), Some("hash_123"));
+        assert_eq!(result.policy_hash, None);
 
         let captures = server.captures.lock().expect("captures");
         let body = captures.first().expect("capture");

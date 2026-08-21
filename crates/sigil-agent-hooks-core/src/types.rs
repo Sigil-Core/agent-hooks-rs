@@ -177,6 +177,7 @@ pub struct SigilConfig {
     pub decision_record_jwk: Option<DecisionJwk>,
     /// Exact issuer required on the execution attestation.
     pub attestation_issuer: String,
+    #[cfg(any(test, feature = "test-certificates"))]
     #[doc(hidden)]
     pub additional_root_certificate_pem: Option<Vec<u8>>,
 }
@@ -194,6 +195,7 @@ pub struct SigilClientBuilder {
     pub(crate) expected_policy_hash: Option<String>,
     pub(crate) decision_record_jwk: Option<DecisionJwk>,
     pub(crate) attestation_issuer: String,
+    #[cfg(any(test, feature = "test-certificates"))]
     pub(crate) additional_root_certificate_pem: Option<Vec<u8>>,
 }
 

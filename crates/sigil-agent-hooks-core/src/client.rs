@@ -67,8 +67,6 @@ struct AuthorizeResponse {
     message: Option<String>,
     #[serde(default, alias = "holdId")]
     hold_id: Option<String>,
-    #[serde(default, alias = "policyHash")]
-    policy_hash: Option<String>,
 }
 
 struct PreparedAuthorizeRequest {
@@ -81,6 +79,14 @@ struct PreparedAuthorizeRequest {
 enum ResponseReadError {
     Transport(String),
     Protocol(String),
+}
+
+impl ResponseReadError {
+    fn into_message(self) -> String {
+        match self {
+            Self::Transport(message) | Self::Protocol(message) => message,
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -119,6 +125,7 @@ impl SigilClientBuilder {
             expected_policy_hash: None,
             decision_record_jwk: None,
             attestation_issuer: "sigil-core".to_string(),
+            #[cfg(any(test, feature = "test-certificates"))]
             additional_root_certificate_pem: None,
         }
     }
@@ -173,6 +180,7 @@ impl SigilClientBuilder {
         self
     }
 
+    #[cfg(any(test, feature = "test-certificates"))]
     #[doc(hidden)]
     pub fn additional_root_certificate_pem(mut self, pem: impl Into<Vec<u8>>) -> Self {
         self.additional_root_certificate_pem = Some(pem.into());
@@ -224,25 +232,28 @@ impl SigilClientBuilder {
             });
         }
 
-        let root_certificate = self
-            .additional_root_certificate_pem
-            .as_deref()
-            .map(reqwest::Certificate::from_pem)
-            .transpose()
-            .map_err(|err| SigilClientError::InvalidConfig {
-                field: "additional_root_certificate_pem",
-                message: err.to_string(),
-            })?;
-        let mut http_builder = reqwest::Client::builder()
+        let http_builder = reqwest::Client::builder()
             .timeout(self.request_timeout)
             .redirect(reqwest::redirect::Policy::none());
-        let mut jwks_http_builder = reqwest::Client::builder()
+        let jwks_http_builder = reqwest::Client::builder()
             .timeout(self.request_timeout)
             .redirect(reqwest::redirect::Policy::none());
-        if let Some(certificate) = root_certificate {
-            http_builder = http_builder.add_root_certificate(certificate.clone());
-            jwks_http_builder = jwks_http_builder.add_root_certificate(certificate);
-        }
+        #[cfg(any(test, feature = "test-certificates"))]
+        let (http_builder, jwks_http_builder) =
+            if let Some(pem) = self.additional_root_certificate_pem.as_deref() {
+                let certificate = reqwest::Certificate::from_pem(pem).map_err(|err| {
+                    SigilClientError::InvalidConfig {
+                        field: "additional_root_certificate_pem",
+                        message: err.to_string(),
+                    }
+                })?;
+                (
+                    http_builder.add_root_certificate(certificate.clone()),
+                    jwks_http_builder.add_root_certificate(certificate),
+                )
+            } else {
+                (http_builder, jwks_http_builder)
+            };
         let http = http_builder.build().map_err(SigilClientError::HttpClient)?;
         let jwks_http = jwks_http_builder
             .build()
@@ -261,6 +272,7 @@ impl SigilClientBuilder {
                 expected_policy_hash: self.expected_policy_hash,
                 decision_record_jwk: self.decision_record_jwk,
                 attestation_issuer,
+                #[cfg(any(test, feature = "test-certificates"))]
                 additional_root_certificate_pem: self.additional_root_certificate_pem,
             },
             http,
@@ -356,6 +368,43 @@ impl SigilClient {
         self.check_intent_at(intent, None).await
     }
 
+    fn response_status_error(&self, status: StatusCode) -> Option<SigilResult> {
+        if status == StatusCode::UNAUTHORIZED {
+            return Some(auth_failure(status));
+        }
+        if status.is_success() || status == StatusCode::FORBIDDEN {
+            return None;
+        }
+        Some(self.classify_invalid_response(format!("Sigil server returned {status}")))
+    }
+
+    fn response_body_error(&self, status: StatusCode, message: String) -> SigilResult {
+        if status == StatusCode::FORBIDDEN {
+            auth_failure(status)
+        } else {
+            self.classify_invalid_response(message)
+        }
+    }
+
+    async fn decode_authorize_response(
+        &self,
+        mut response: reqwest::Response,
+        status: StatusCode,
+    ) -> Result<(serde_json::Value, AuthorizeResponse), SigilResult> {
+        let response_body = read_response_body(&mut response)
+            .await
+            .map_err(|error| self.response_body_error(status, error.into_message()))?;
+        let value = strict_json_value(&response_body, MAX_RESPONSE_BYTES).map_err(|_| {
+            self.response_body_error(status, "invalid authorization JSON".to_string())
+        })?;
+        let data: AuthorizeResponse = serde_json::from_value(value.clone())
+            .map_err(|error| self.response_body_error(status, error.to_string()))?;
+        if status == StatusCode::FORBIDDEN && data.status != "DENIED" {
+            return Err(auth_failure(status));
+        }
+        Ok((value, data))
+    }
+
     async fn check_intent_at(
         &self,
         intent: &SigilIntent,
@@ -378,7 +427,7 @@ impl SigilClient {
                 .as_secs(),
         };
         let prepared = self.prepare_authorize_request_at(intent, now)?;
-        let mut response = match self
+        let response = match self
             .http
             .post(format!("{}/v1/authorize", self.config.api_url))
             .header("Content-Type", "application/json")
@@ -394,63 +443,17 @@ impl SigilClient {
         };
 
         let response_status = response.status();
-        if response_status == StatusCode::UNAUTHORIZED {
-            return Ok(SigilResult {
-                decision: SigilDecision::Denied,
-                error_code: Some("SIGIL_AUTH_FAILURE".to_string()),
-                message: Some(format!("Authentication failed ({response_status})")),
-                ..SigilResult::default()
-            });
+        if let Some(error) = self.response_status_error(response_status) {
+            return Ok(error);
         }
 
-        if response_status.is_server_error() {
-            return Ok(
-                self.classify_invalid_response(format!("Sigil server returned {response_status}"))
-            );
-        }
-        if !response_status.is_success() && response_status != StatusCode::FORBIDDEN {
-            return Ok(
-                self.classify_invalid_response(format!("Sigil server returned {response_status}"))
-            );
-        }
-
-        let response_body = match read_response_body(&mut response).await {
-            Ok(body) => body,
-            Err(ResponseReadError::Transport(err)) => {
-                if response_status == StatusCode::FORBIDDEN {
-                    return Ok(auth_failure(response_status));
-                }
-                return Ok(self.classify_invalid_response(err));
-            }
-            Err(ResponseReadError::Protocol(err)) => {
-                if response_status == StatusCode::FORBIDDEN {
-                    return Ok(auth_failure(response_status));
-                }
-                return Ok(self.classify_invalid_response(err));
-            }
+        let (value, data) = match self
+            .decode_authorize_response(response, response_status)
+            .await
+        {
+            Ok(decoded) => decoded,
+            Err(error) => return Ok(error),
         };
-
-        let value = match strict_json_value(&response_body, MAX_RESPONSE_BYTES) {
-            Ok(value) => value,
-            Err(_) => {
-                if response_status == StatusCode::FORBIDDEN {
-                    return Ok(auth_failure(response_status));
-                }
-                return Ok(self.classify_invalid_response("invalid authorization JSON".to_string()));
-            }
-        };
-        let data: AuthorizeResponse = match serde_json::from_value(value.clone()) {
-            Ok(data) => data,
-            Err(err) => {
-                if response_status == StatusCode::FORBIDDEN {
-                    return Ok(auth_failure(response_status));
-                }
-                return Ok(self.classify_invalid_response(err.to_string()));
-            }
-        };
-        if response_status == StatusCode::FORBIDDEN && data.status != "DENIED" {
-            return Ok(auth_failure(response_status));
-        }
         let verification = self
             .verify_authorization_response(
                 &value,
@@ -470,18 +473,18 @@ impl SigilClient {
                 DecisionSurface::Authorize,
             );
         }
-        let policy_hash = data.policy_hash;
+        let verified_policy_hash = verification.verified_policy_hash().map(str::to_string);
         match verification.decision {
             SigilDecision::Allowed => Ok(SigilResult {
                 decision: SigilDecision::Allowed,
-                policy_hash,
+                policy_hash: verified_policy_hash,
                 authorization: verification.authorization,
                 ..SigilResult::default()
             }),
             SigilDecision::Pending => Ok(SigilResult {
                 decision: SigilDecision::Pending,
                 hold_id: data.hold_id,
-                policy_hash,
+                policy_hash: verified_policy_hash,
                 message: data.message,
                 ..SigilResult::default()
             }),
@@ -510,7 +513,7 @@ impl SigilClient {
                         data.message
                             .unwrap_or_else(|| "Action blocked by policy".to_string())
                     }),
-                    policy_hash,
+                    policy_hash: verified_policy_hash,
                     ..SigilResult::default()
                 })
             }
