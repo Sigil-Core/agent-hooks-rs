@@ -121,7 +121,7 @@ impl SigilClientBuilder {
             framework: FrameworkId::AgentHooks,
             fail_mode: FailMode::Closed,
             request_timeout: Duration::from_secs(DEFAULT_TIMEOUT_SECS),
-            decision_verification_mode: DecisionVerificationMode::Warn,
+            decision_verification_mode: DecisionVerificationMode::Enforce,
             expected_policy_hash: None,
             decision_record_jwk: None,
             attestation_issuer: "sigil-core".to_string(),
@@ -674,7 +674,7 @@ async fn read_response_body(
 #[cfg(test)]
 mod tests {
     use super::generate_intent_commit_at;
-    use crate::{FrameworkId, HttpMethod, SigilClient, SigilIntent};
+    use crate::{DecisionVerificationMode, FrameworkId, HttpMethod, SigilClient, SigilIntent};
     use axum::{Router, body::Bytes, extract::State, http::StatusCode, routing::post};
     use std::sync::{Arc, Mutex};
     use tokio::{net::TcpListener, sync::oneshot};
@@ -790,6 +790,7 @@ mod tests {
     async fn auto_generated_commit_matches_wire_fixture_with_pinned_timestamp() {
         let server = spawn().await;
         let client = SigilClient::builder("sk_fixture")
+            .decision_verification_mode(DecisionVerificationMode::Warn)
             .api_url(server.base_url.clone())
             .additional_root_certificate_pem(TEST_CERT_PEM)
             .agent_id("config-agent")
@@ -846,6 +847,7 @@ mod tests {
     async fn intent_bridge_fields_match_the_frozen_wire_contract() {
         let server = spawn().await;
         let client = SigilClient::builder("sk_fixture")
+            .decision_verification_mode(DecisionVerificationMode::Warn)
             .api_url(server.base_url.clone())
             .additional_root_certificate_pem(TEST_CERT_PEM)
             .agent_id("fixture-agent")
@@ -888,6 +890,7 @@ mod tests {
     async fn method_is_absent_for_non_http_actions() {
         let server = spawn().await;
         let client = SigilClient::builder("sk_fixture")
+            .decision_verification_mode(DecisionVerificationMode::Warn)
             .api_url(server.base_url.clone())
             .additional_root_certificate_pem(TEST_CERT_PEM)
             .task_id("fixture-task")
@@ -919,6 +922,7 @@ mod tests {
     #[test]
     fn builder_stores_the_normalized_attestation_issuer() {
         let client = SigilClient::builder("sk_fixture")
+            .decision_verification_mode(DecisionVerificationMode::Warn)
             .attestation_issuer("  sigil-core  ")
             .build()
             .expect("client should build");

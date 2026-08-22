@@ -15,11 +15,11 @@ test-certificates = ["sigil-agent-hooks-core/test-certificates"]
 async-trait.workspace = true
 ironclaw = { version = "0.24", default-features = false }
 serde_json.workspace = true
-sigil-agent-hooks-core = { version = "=0.4.0", path = "../sigil-agent-hooks-core" }
+sigil-agent-hooks-core = { version = "=0.5.0", path = "../sigil-agent-hooks-core" }
 
 [dev-dependencies]
 axum = "0.8"
 base64.workspace = true
-sigil-agent-hooks-core = { version = "=0.4.0", path = "../sigil-agent-hooks-core", features = ["test-certificates"] }
+sigil-agent-hooks-core = { version = "=0.5.0", path = "../sigil-agent-hooks-core", features = ["test-certificates"] }
 tokio.workspace = true
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }

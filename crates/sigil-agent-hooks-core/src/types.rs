@@ -102,10 +102,10 @@ impl SigilDecision {
 pub enum DecisionVerificationMode {
     /// Preserve legacy execution for an `ALLOWED` or `APPROVED` response that
     /// cannot be verified, but mark its authorization as legacy-unverified.
-    #[default]
     Warn,
     /// Deny an `ALLOWED` or `APPROVED` response unless its decision record and
     /// execution attestation verify and bind to the current request.
+    #[default]
     Enforce,
 }
 

@@ -255,7 +255,9 @@ mod tests {
 
     impl SigilClient {
         fn builder(api_key: impl Into<String>) -> SigilClientBuilder {
-            CoreSigilClient::builder(api_key).additional_root_certificate_pem(TEST_CERT_PEM)
+            CoreSigilClient::builder(api_key)
+                .decision_verification_mode(DecisionVerificationMode::Warn)
+                .additional_root_certificate_pem(TEST_CERT_PEM)
         }
     }
 
