@@ -14,7 +14,7 @@ explicit `Warn` mode remains available only as a rollback compatibility path.
 
 Version 0.4.0 added signed decision-record verification, canonical `ALLOWED`
 output, fresh request nonces, warn/enforce rollout modes, and opaque execution
-capabilities. The legacy `APPROVED` wire literal remains a permanent
+capabilities. The deprecated legacy success value remains a permanent
 deserialize-only input alias and is never re-emitted.
 
 Version 0.3.0 added schema-closed Rust wire types for compiled response-policy
