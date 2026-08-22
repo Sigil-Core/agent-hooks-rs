@@ -9,7 +9,10 @@ This workspace provides two crates:
 
 The companion TypeScript package lives at [`@sigilcore/agent-hooks`](https://github.com/Sigil-Core/agent-hooks). Both packages share contract fixtures that guarantee wire-format parity (see [architecture.md](./architecture.md)).
 
-Version 0.4.0 adds signed decision-record verification, canonical `ALLOWED`
+Version 0.5.0 requires signed decision-record verification by default. The
+explicit `Warn` mode remains available only as a rollback compatibility path.
+
+Version 0.4.0 added signed decision-record verification, canonical `ALLOWED`
 output, fresh request nonces, warn/enforce rollout modes, and opaque execution
 capabilities. The legacy `APPROVED` wire literal remains a permanent
 deserialize-only input alias and is never re-emitted.
@@ -57,6 +60,7 @@ async fn main() {
     let client = SigilClient::builder(std::env::var("SIGIL_API_KEY").unwrap())
         .agent_id("my-rust-agent")
         .fail_mode(FailMode::Closed)
+        .expected_policy_hash(std::env::var("SIGIL_POLICY_HASH").unwrap())
         .build()
         .expect("valid config");
 
@@ -89,6 +93,7 @@ use sigil_agent_hooks_ironclaw::IronclawSigilHook;
 let client = SigilClient::builder(std::env::var("SIGIL_API_KEY").unwrap())
     .agent_id("my-ironclaw-agent")
     .fail_mode(FailMode::Closed)
+    .expected_policy_hash(std::env::var("SIGIL_POLICY_HASH").unwrap())
     .build()
     .expect("valid config");
 
@@ -183,10 +188,34 @@ impl ToolIntentMapper for MyMapper {
 | `.framework(id)` | `FrameworkId` | `AgentHooks` | Framework identifier for the authorize request |
 | `.fail_mode(mode)` | `FailMode` | `Closed` | Behavior when Sigil is unreachable |
 | `.request_timeout(dur)` | `Duration` | `5s` | HTTP request timeout |
-| `.decision_verification_mode(mode)` | `DecisionVerificationMode` | `Warn` | Verify and log legacy traffic in Wave 1, or require signed authorization in `Enforce`. |
-| `.expected_policy_hash(hash)` | `impl Into<String>` | unset | Exact lowercase 64-hex SHA-256 pin; required at build time in enforce mode. Warn mode without a pin logs a diagnostic on every authorization call. |
+| `.decision_verification_mode(mode)` | `DecisionVerificationMode` | `Enforce` | Require signed authorization by default. Explicit `Warn` is the rollback compatibility mode. |
+| `.expected_policy_hash(hash)` | `impl Into<String>` | unset | Exact lowercase 64-hex SHA-256 pin; required at build time in default/enforce mode. Warn mode without a pin logs a diagnostic on every authorization call. |
 | `.decision_record_jwk(jwk)` | `DecisionJwk` | JWKS discovery | Static Ed25519 key pin; takes precedence over network discovery. |
 | `.attestation_issuer(issuer)` | `impl Into<String>` | `sigil-core` | Expected Intent Attestation issuer. |
+
+### Signed decision verification
+
+Version 0.5.0 defaults to `DecisionVerificationMode::Enforce`. A client must
+provide the exact expected policy hash and accepts execution authority only
+after the decision record and intent attestation verify. To roll back during a
+controlled compatibility window, select `DecisionVerificationMode::Warn`
+explicitly. Warn mode preserves legacy unverified authority; it must not be
+treated as the final production posture.
+
+The deterministic source preflight uses the 23 frozen decision vectors and six
+malformed-JOSE mutations:
+
+```sh
+cargo test -p sigil-agent-hooks-core --test decision_fixtures \
+  wave3_enforce_batch -- --nocapture
+```
+
+It requires 29 cases, zero unexpected verification failures, zero tamper
+accepts, zero legacy-path fallbacks, and exact decision and reason codes. The
+named library drills also cover the inclusive 30-second clock boundary,
+cold-cache JWKS outage, two-key rotation overlap, oversized token and JWKS
+inputs, and signature tampering. These source checks do not replace the
+postpublication exact crates.io and fresh-install release evidence.
 
 `SigilIntent` fields:
 

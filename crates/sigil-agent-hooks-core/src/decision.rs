@@ -21,7 +21,7 @@ const JWKS_MAX_BYTES: usize = 64 * 1024;
 const JWKS_MAX_KEYS: usize = 16;
 const JWKS_CACHE_TTL: Duration = Duration::from_secs(300);
 const CLOCK_SKEW_SECONDS: i64 = 30;
-const CONSUMER_VERSION: &str = "0.4.0";
+const CONSUMER_VERSION: &str = "0.5.0";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1147,6 +1147,7 @@ mod tests {
         let pinned: DecisionJwk =
             serde_json::from_value(fixture_jwk("pinned")).expect("fixture JWK");
         let client = SigilClient::builder("sk_fixture")
+            .decision_verification_mode(DecisionVerificationMode::Warn)
             .decision_record_jwk(pinned.clone())
             .build()
             .expect("pinned client");
@@ -1157,7 +1158,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cold_cache_outage_returns_key_unavailable() {
+    async fn wave3_cold_cache_jwks_outage_drill_returns_key_unavailable() {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .expect("reserve unused address");
@@ -1217,7 +1218,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn jwks_redirects_and_oversized_bodies_fail_closed() {
+    async fn wave3_jwks_redirect_and_oversize_drill_fails_closed() {
         let redirect_app = Router::new().route(
             "/.well-known/jwks.json",
             get(|| async {
@@ -1263,7 +1264,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cached_rotation_overlap_ignores_response_supplied_key_origin() {
+    async fn wave3_two_kid_rotation_overlap_drill_uses_one_cached_set() {
         let fixture: Value = serde_json::from_str(include_str!(
             "../../../contract-fixtures/v1/decision-records.json"
         ))
@@ -1295,7 +1296,11 @@ mod tests {
             },
         );
 
-        let response = serde_json::json!({
+        let primary_response = serde_json::json!({
+            "status": "ALLOWED",
+            "decision_record": fixture["tokens"]["allowed"],
+        });
+        let rotation_response = serde_json::json!({
             "status": "ALLOWED",
             "decision_record": fixture["tokens"]["rotation_allowed"],
             "jwks_uri": "https://attacker.invalid/jwks.json"
@@ -1314,10 +1319,16 @@ mod tests {
             now_unix_seconds: fixture["context"]["nowUnixSeconds"].as_i64(),
         };
 
-        let result = client
-            .verify_authorization_response(&response, &context)
+        let primary_result = client
+            .verify_authorization_response(&primary_response, &context)
             .await;
-        assert_eq!(result.decision, SigilDecision::Allowed);
-        assert_eq!(result.reason, None);
+        assert_eq!(primary_result.decision, SigilDecision::Allowed);
+        assert_eq!(primary_result.reason, None);
+
+        let rotation_result = client
+            .verify_authorization_response(&rotation_response, &context)
+            .await;
+        assert_eq!(rotation_result.decision, SigilDecision::Allowed);
+        assert_eq!(rotation_result.reason, None);
     }
 }

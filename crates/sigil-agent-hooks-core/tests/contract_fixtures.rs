@@ -1,6 +1,6 @@
 use axum::{Router, body::Bytes, extract::State, http::StatusCode, routing::post};
 use sha2::{Digest, Sha256};
-use sigil_agent_hooks_core::{FrameworkId, SigilClient, SigilIntent};
+use sigil_agent_hooks_core::{DecisionVerificationMode, FrameworkId, SigilClient, SigilIntent};
 use std::{
     fs,
     path::PathBuf,
@@ -134,6 +134,7 @@ fn fixture_tree_pins_the_exact_typescript_commit() {
 async fn bash_fixture_matches_http_wire_body() {
     let server = spawn().await;
     let client = SigilClient::builder("sk_fixture")
+        .decision_verification_mode(DecisionVerificationMode::Warn)
         .api_url(server.base_url.clone())
         .additional_root_certificate_pem(TEST_CERT_PEM)
         .agent_id("fixture-agent")
@@ -162,6 +163,7 @@ async fn bash_fixture_matches_http_wire_body() {
 async fn web_fetch_fixture_matches_http_wire_body() {
     let server = spawn().await;
     let client = SigilClient::builder("sk_fixture")
+        .decision_verification_mode(DecisionVerificationMode::Warn)
         .api_url(server.base_url.clone())
         .additional_root_certificate_pem(TEST_CERT_PEM)
         .agent_id("fixture-agent")
@@ -190,6 +192,7 @@ async fn web_fetch_fixture_matches_http_wire_body() {
 async fn wallet_transfer_fixture_matches_http_wire_body() {
     let server = spawn().await;
     let client = SigilClient::builder("sk_fixture")
+        .decision_verification_mode(DecisionVerificationMode::Warn)
         .api_url(server.base_url.clone())
         .additional_root_certificate_pem(TEST_CERT_PEM)
         .agent_id("fixture-agent")
@@ -220,6 +223,7 @@ async fn wallet_transfer_fixture_matches_http_wire_body() {
 async fn intent_agent_override_fixture_matches_http_wire_body() {
     let server = spawn().await;
     let client = SigilClient::builder("sk_fixture")
+        .decision_verification_mode(DecisionVerificationMode::Warn)
         .api_url(server.base_url.clone())
         .additional_root_certificate_pem(TEST_CERT_PEM)
         .agent_id("config-agent")

@@ -119,8 +119,8 @@ or undeclared members. This remains schema parity only.
 **rust-ci.yml** runs on every push to `main` and `session/**` branches, and on all pull requests:
 
 - `cargo fmt --check` -- formatting gate
-- `node scripts/decision-literal-gate.mjs` -- advisory runtime literal hygiene
-- `node scripts/decision-architecture-gate.mjs` -- advisory adapter boundary
+- `node scripts/decision-literal-gate.mjs --blocking` -- runtime literal hygiene gate
+- `node scripts/decision-architecture-gate.mjs --blocking` -- adapter boundary gate
 - `cargo clippy --workspace --all-features --all-targets -- -D warnings` -- lint gate
 - `cargo test --workspace --all-features` -- unit + contract fixture tests
 - `cargo deny check` -- license and dependency policy (see `deny.toml`)
@@ -131,6 +131,13 @@ or undeclared members. This remains schema parity only.
 ## Design decisions
 
 **Default fail mode is Closed.** The TypeScript package defaults to `Open` for backward compatibility with v0.1.0. The Rust crate starts fresh with no legacy behavior to preserve, so it defaults to `Closed` -- the safer posture for production use.
+
+**Default verification mode is Enforce.** Version 0.5.0 requires an exact
+policy-hash pin and verified signed authority unless a caller deliberately
+selects `Warn` as a rollback compatibility mode. Verification mode does not
+change transport fail-mode semantics: an explicit `FailMode::Open` still
+applies only when no HTTP response is received, while any reached but malformed
+or unverifiable response denies.
 
 **No runtime TLS certificate bundling.** The crate uses `rustls-tls-native-roots` (reqwest feature) so it picks up the host system's certificate store. No vendored root certificates.
 

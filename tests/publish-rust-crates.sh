@@ -27,8 +27,8 @@ case "${command_name}" in
   metadata)
     printf 'metadata\n' >> "${FAKE_CARGO_LOG}"
     printf '{"packages":[{"name":"sigil-agent-hooks-core","version":"%s"},{"name":"sigil-agent-hooks-ironclaw","version":"%s"}]}\n' \
-      "${FAKE_CORE_VERSION:-0.4.0}" \
-      "${FAKE_IRONCLAW_VERSION:-0.4.0}"
+      "${FAKE_CORE_VERSION:-0.5.0}" \
+      "${FAKE_IRONCLAW_VERSION:-0.5.0}"
     ;;
   info)
     crate_spec="${1:?missing crate spec}"
@@ -83,11 +83,11 @@ run_publisher() {
     FAKE_CARGO_LOG="${log_file}" \
     FAKE_CARGO_STATE="${state_dir}" \
     FAKE_PROPAGATION_POLLS="${FAKE_PROPAGATION_POLLS:-0}" \
-    FAKE_CORE_VERSION="${FAKE_CORE_VERSION:-0.4.0}" \
-    FAKE_IRONCLAW_VERSION="${FAKE_IRONCLAW_VERSION:-0.4.0}" \
+    FAKE_CORE_VERSION="${FAKE_CORE_VERSION:-0.5.0}" \
+    FAKE_IRONCLAW_VERSION="${FAKE_IRONCLAW_VERSION:-0.5.0}" \
     SIGIL_CRATES_IO_MAX_ATTEMPTS="${SIGIL_CRATES_IO_MAX_ATTEMPTS:-4}" \
     SIGIL_CRATES_IO_RETRY_SECONDS=0 \
-    bash "${publisher}" 0.4.0
+    bash "${publisher}" 0.5.0
 }
 
 reset_case fresh
@@ -95,7 +95,7 @@ FAKE_PROPAGATION_POLLS=2 run_publisher
 published="$(grep '^publish ' "${log_file}")"
 expected=$'publish sigil-agent-hooks-core\npublish sigil-agent-hooks-ironclaw'
 [[ "${published}" == "${expected}" ]]
-[[ "$(grep -c '^info sigil-agent-hooks-core@0.4.0$' "${log_file}")" -ge 4 ]]
+[[ "$(grep -c '^info sigil-agent-hooks-core@0.5.0$' "${log_file}")" -ge 4 ]]
 
 reset_case retry
 : > "${state_dir}/sigil-agent-hooks-core.available"
@@ -117,18 +117,18 @@ if FAKE_PROPAGATION_POLLS=10 SIGIL_CRATES_IO_MAX_ATTEMPTS=2 run_publisher >"${ca
   echo "publish-rust-crates test: unavailable core unexpectedly succeeded" >&2
   exit 1
 fi
-grep -q 'sigil-agent-hooks-core@0.4.0 was not available after 2 checks' "${case_root}/stderr"
+grep -q 'sigil-agent-hooks-core@0.5.0 was not available after 2 checks' "${case_root}/stderr"
 if grep -q '^publish sigil-agent-hooks-ironclaw$' "${log_file}"; then
   echo "publish-rust-crates test: dependent crate published before core availability" >&2
   exit 1
 fi
 
 reset_case mismatch
-if FAKE_IRONCLAW_VERSION=0.4.1 run_publisher >"${case_root}/stdout" 2>"${case_root}/stderr"; then
+if FAKE_IRONCLAW_VERSION=0.5.1 run_publisher >"${case_root}/stdout" 2>"${case_root}/stderr"; then
   echo "publish-rust-crates test: mismatched manifest version unexpectedly succeeded" >&2
   exit 1
 fi
-grep -q 'sigil-agent-hooks-ironclaw manifest version 0.4.1 does not match release 0.4.0' "${case_root}/stderr"
+grep -q 'sigil-agent-hooks-ironclaw manifest version 0.5.1 does not match release 0.5.0' "${case_root}/stderr"
 if grep -q '^publish ' "${log_file}"; then
   echo "publish-rust-crates test: version mismatch published a crate" >&2
   exit 1

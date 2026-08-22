@@ -407,3 +407,185 @@ async fn shared_malformed_jose_vectors_fail_closed() {
         assert!(!result.permits_execution());
     }
 }
+
+#[tokio::test]
+async fn wave3_enforce_batch_has_zero_unexpected_or_legacy_outcomes() {
+    let fixture = fixture();
+    let valid_ids = [
+        "valid_allowed",
+        "alias_approved_input",
+        "valid_denied",
+        "valid_pending",
+        "valid_test_run",
+        "valid_hold_resolve",
+        "valid_rotation_overlap",
+    ];
+    let mut unexpected_verification_failures = 0usize;
+    let mut tamper_accepts = 0usize;
+    let mut legacy_path_fallbacks = 0usize;
+    let mut reason_code_mismatches = 0usize;
+    let mut negative_decision_mismatches = 0usize;
+
+    for vector in &fixture.vectors {
+        let is_valid = valid_ids.contains(&vector.id.as_str());
+        let result = client(
+            &fixture,
+            DecisionVerificationMode::Enforce,
+            vector.key_set.as_deref() == Some("rotation_overlap"),
+        )
+        .verify_authorization_response(&body(&fixture, vector), &context(&fixture, vector))
+        .await;
+        let expected = vector
+            .expected
+            .get("decision")
+            .or_else(|| vector.expected.get("enforceDecision"))
+            .and_then(Value::as_str)
+            .expect("enforce decision expectation");
+        let expected_reason = vector.expected.get("reason").and_then(Value::as_str);
+
+        if is_valid && (result.decision != expected_decision(expected) || result.reason.is_some()) {
+            unexpected_verification_failures += 1;
+        }
+        if !is_valid && result.permits_execution() {
+            tamper_accepts += 1;
+        }
+        if result.is_legacy_unverified() {
+            legacy_path_fallbacks += 1;
+        }
+        if result.reason.map(DecisionVerificationReason::as_str) != expected_reason {
+            reason_code_mismatches += 1;
+        }
+        if !is_valid && result.decision != SigilDecision::Denied {
+            negative_decision_mismatches += 1;
+        }
+    }
+
+    let valid = fixture
+        .vectors
+        .iter()
+        .find(|vector| vector.id == "valid_allowed")
+        .expect("valid vector");
+    for vector in &fixture.malformed_jose_vectors {
+        let malformed_body = json!({
+            "status": "ALLOWED",
+            "decision_record": mutate_token(&fixture, vector),
+            "intent_attestation": fixture.tokens["attestation"],
+        });
+        let result = client(&fixture, DecisionVerificationMode::Enforce, false)
+            .verify_authorization_response(&malformed_body, &context(&fixture, valid))
+            .await;
+        if result.permits_execution() {
+            tamper_accepts += 1;
+        }
+        if result.is_legacy_unverified() {
+            legacy_path_fallbacks += 1;
+        }
+        if result.reason != Some(DecisionVerificationReason::Malformed) {
+            reason_code_mismatches += 1;
+        }
+        if result.decision != SigilDecision::Denied {
+            negative_decision_mismatches += 1;
+        }
+    }
+
+    let receipt = json!({
+        "schema": "sigil-agent-hooks-rs-enforcement-batch/v1",
+        "consumerVersion": "0.5.0",
+        "mode": "enforce",
+        "totalCases": fixture.vectors.len() + fixture.malformed_jose_vectors.len(),
+        "validCases": valid_ids.len(),
+        "negativeCases": fixture.vectors.len() + fixture.malformed_jose_vectors.len() - valid_ids.len(),
+        "unexpectedVerificationFailures": unexpected_verification_failures,
+        "tamperAccepts": tamper_accepts,
+        "legacyPathFallbacks": legacy_path_fallbacks,
+        "reasonCodeMismatches": reason_code_mismatches,
+        "negativeDecisionMismatches": negative_decision_mismatches,
+    });
+    eprintln!("{receipt}");
+
+    assert_eq!(fixture.vectors.len(), 23);
+    assert_eq!(fixture.malformed_jose_vectors.len(), 6);
+    assert_eq!(unexpected_verification_failures, 0);
+    assert_eq!(tamper_accepts, 0);
+    assert_eq!(legacy_path_fallbacks, 0);
+    assert_eq!(reason_code_mismatches, 0);
+    assert_eq!(negative_decision_mismatches, 0);
+}
+
+#[tokio::test]
+async fn wave3_clock_skew_drill_accepts_thirty_seconds_and_rejects_thirty_one() {
+    let fixture = fixture();
+    let vector = fixture
+        .vectors
+        .iter()
+        .find(|vector| vector.id == "valid_allowed")
+        .expect("valid vector");
+    let client = client(&fixture, DecisionVerificationMode::Enforce, false);
+    let response = body(&fixture, vector);
+
+    for now in [1_999_999_970, 2_000_000_090] {
+        let mut verification_context = context(&fixture, vector);
+        verification_context.now_unix_seconds = Some(now);
+        let result = client
+            .verify_authorization_response(&response, &verification_context)
+            .await;
+        assert_eq!(result.reason, None, "boundary now={now}");
+        assert!(result.permits_execution(), "boundary now={now}");
+    }
+
+    for now in [1_999_999_969, 2_000_000_091] {
+        let mut verification_context = context(&fixture, vector);
+        verification_context.now_unix_seconds = Some(now);
+        let result = client
+            .verify_authorization_response(&response, &verification_context)
+            .await;
+        assert_eq!(
+            result.reason,
+            Some(DecisionVerificationReason::Expired),
+            "outside boundary now={now}"
+        );
+        assert!(!result.permits_execution(), "outside boundary now={now}");
+    }
+}
+
+#[tokio::test]
+async fn wave3_tamper_and_oversize_token_drill_fails_closed() {
+    let fixture = fixture();
+    let valid = fixture
+        .vectors
+        .iter()
+        .find(|vector| vector.id == "valid_allowed")
+        .expect("valid vector");
+    let tampered = fixture
+        .vectors
+        .iter()
+        .find(|vector| vector.id == "tampered_signature")
+        .expect("tamper vector");
+    let tampered_result = client(&fixture, DecisionVerificationMode::Enforce, false)
+        .verify_authorization_response(&body(&fixture, tampered), &context(&fixture, tampered))
+        .await;
+    assert_eq!(
+        tampered_result.reason,
+        Some(DecisionVerificationReason::Signature)
+    );
+    assert!(!tampered_result.permits_execution());
+
+    let oversized = fixture
+        .malformed_jose_vectors
+        .iter()
+        .find(|vector| vector.mutation == "oversize")
+        .expect("oversize vector");
+    let oversized_body = json!({
+        "status": "ALLOWED",
+        "decision_record": mutate_token(&fixture, oversized),
+        "intent_attestation": fixture.tokens["attestation"],
+    });
+    let oversized_result = client(&fixture, DecisionVerificationMode::Enforce, false)
+        .verify_authorization_response(&oversized_body, &context(&fixture, valid))
+        .await;
+    assert_eq!(
+        oversized_result.reason,
+        Some(DecisionVerificationReason::Malformed)
+    );
+    assert!(!oversized_result.permits_execution());
+}

@@ -257,7 +257,7 @@ fn micros_to_decimal(micros: u128) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::FailMode;
+    use crate::{DecisionVerificationMode, FailMode};
     use axum::{Router, body::Bytes, extract::State, http::StatusCode, routing::post};
     use std::sync::Arc;
     use tokio::{net::TcpListener, sync::oneshot};
@@ -339,6 +339,7 @@ mod tests {
 
     fn client_with_task(task_id: &str) -> SigilClient {
         SigilClient::builder("sk_fixture")
+            .decision_verification_mode(DecisionVerificationMode::Warn)
             .api_url("https://127.0.0.1:9")
             .task_id(task_id)
             .fail_mode(FailMode::Closed)
@@ -470,6 +471,7 @@ mod tests {
     async fn check_model_budget_sends_cumulative_model_usage() {
         let server = spawn().await;
         let client = SigilClient::builder("sk_fixture")
+            .decision_verification_mode(DecisionVerificationMode::Warn)
             .api_url(server.base_url.clone())
             .additional_root_certificate_pem(TEST_CERT_PEM)
             .task_id("task-model-budget")

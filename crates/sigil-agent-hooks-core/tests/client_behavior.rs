@@ -273,7 +273,9 @@ async fn spawn_signed_denied_server() -> (RunningServer, DecisionJwk) {
 }
 
 fn test_client_builder(api_key: impl Into<String>) -> sigil_agent_hooks_core::SigilClientBuilder {
-    SigilClient::builder(api_key).additional_root_certificate_pem(TEST_CERT_PEM)
+    SigilClient::builder(api_key)
+        .decision_verification_mode(DecisionVerificationMode::Warn)
+        .additional_root_certificate_pem(TEST_CERT_PEM)
 }
 
 fn fixture_bash_intent() -> SigilIntent {
@@ -311,6 +313,34 @@ async fn unsigned_legacy_response_does_not_expose_an_unverified_policy_hash() {
 
     assert_eq!(result.decision, SigilDecision::Allowed, "{result:?}");
     assert_eq!(result.policy_hash, None);
+}
+
+#[tokio::test]
+async fn omitted_verification_mode_denies_an_unsigned_allowed_response() {
+    let server = spawn_server(MockResponse {
+        status: StatusCode::OK,
+        body: MockBody::Json(serde_json::json!({ "status": "ALLOWED" })),
+        delay: Duration::ZERO,
+    })
+    .await;
+    let client = SigilClient::builder("sk_fixture")
+        .api_url(server.base_url.clone())
+        .expected_policy_hash("a".repeat(64))
+        .additional_root_certificate_pem(TEST_CERT_PEM)
+        .build()
+        .expect("default enforce client should build with a policy pin");
+
+    let result = client
+        .check_intent(&fixture_bash_intent())
+        .await
+        .expect("check should fail closed without a signed record");
+
+    assert_eq!(result.decision, SigilDecision::Denied);
+    assert_eq!(
+        result.message.as_deref(),
+        Some("Authorization response verification failed (record_missing)")
+    );
+    assert!(!authorization_permits_execution(&result));
 }
 
 #[tokio::test]
@@ -652,11 +682,12 @@ async fn timeout_is_unreachable_in_closed_mode() {
 }
 
 #[tokio::test]
-async fn open_mode_sets_fail_open_on_unreachable() {
-    let client = test_client_builder("sk_fixture")
+async fn default_enforce_preserves_explicit_fail_open_for_unreachable() {
+    let client = SigilClient::builder("sk_fixture")
         .api_url("https://127.0.0.1:9")
         .fail_mode(FailMode::Open)
         .request_timeout(Duration::from_millis(25))
+        .expected_policy_hash("a".repeat(64))
         .build()
         .expect("client should build");
 
@@ -672,18 +703,18 @@ async fn open_mode_sets_fail_open_on_unreachable() {
 }
 
 #[tokio::test]
-async fn malformed_response_cannot_fail_open_in_enforce_mode() {
+async fn reached_malformed_response_cannot_fail_open_in_default_enforce_mode() {
     let server = spawn_server(MockResponse {
         status: StatusCode::OK,
         body: MockBody::Text("not-json".to_string()),
         delay: Duration::ZERO,
     })
     .await;
-    let client = test_client_builder("sk_fixture")
+    let client = SigilClient::builder("sk_fixture")
         .api_url(server.base_url.clone())
         .fail_mode(FailMode::Open)
-        .decision_verification_mode(DecisionVerificationMode::Enforce)
         .expected_policy_hash("a".repeat(64))
+        .additional_root_certificate_pem(TEST_CERT_PEM)
         .build()
         .expect("client should build");
 
@@ -869,6 +900,32 @@ fn enforce_mode_requires_a_policy_pin_at_build_time() {
         .expect_err("enforce without policy pin should fail");
 
     assert!(err.to_string().contains("expected_policy_hash"));
+}
+
+#[test]
+fn default_enforce_mode_requires_a_policy_pin_at_build_time() {
+    let err = SigilClient::builder("sk_fixture")
+        .build()
+        .expect_err("default enforce mode without a policy pin should fail");
+
+    assert!(err.to_string().contains("expected_policy_hash"));
+}
+
+#[test]
+fn default_verification_mode_is_enforce() {
+    assert_eq!(
+        DecisionVerificationMode::default(),
+        DecisionVerificationMode::Enforce
+    );
+    let client = SigilClient::builder("sk_fixture")
+        .expected_policy_hash("a".repeat(64))
+        .build()
+        .expect("default enforce client should build with a policy pin");
+
+    assert_eq!(
+        client.config().decision_verification_mode,
+        DecisionVerificationMode::Enforce
+    );
 }
 
 #[test]
